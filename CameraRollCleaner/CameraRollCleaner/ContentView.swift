@@ -1,51 +1,87 @@
 import SwiftUI
 
-// --- PAGE 1: The Home Dashboard ---
 struct ContentView: View {
+    // We create the manager here once
+    @StateObject var photoManager = PhotoManager()
+
     var body: some View {
-        NavigationStack { // 1. This is the "Engine" of navigation
-            VStack(spacing: 30) {
-                Text("Photo Cleaner AI")
-                    .font(.largeTitle)
-                    .bold()
+        NavigationStack {
+            VStack(spacing: 25) {
+                Text("AI Photo Cleaner")
+                    .font(.largeTitle).bold()
                 
-                Image(systemName: "photo.stack")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 100, height: 100)
-                    .foregroundStyle(.blue)
-                
-                // 2. This is like an <a href="..."> tag
-                NavigationLink(destination: ResultsView()) {
-                    Text("View Redundant Photos")
-                        .fontWeight(.semibold)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+                // Dashboard stats
+                HStack(spacing: 40) {
+                    StatView(label: "Total", value: photoManager.photoCount)
+                    StatView(label: "Screenshots", value: photoManager.screenshotCount, color: .red)
                 }
-                .padding(.horizontal)
+                .padding()
+                .background(Color.gray.opacity(0.1))
+                .cornerRadius(15)
+
+                if !photoManager.isAuthorized {
+                    Button("Grant Library Access") {
+                        photoManager.requestAccessAndFetch()
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    // Navigate to the results page
+                    NavigationLink(destination: ResultsView(count: photoManager.screenshotCount)) {
+                        Text("Review Screenshots")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                }
             }
-            .navigationTitle("Home") // Adds a title at the top
+            .padding()
+            .navigationTitle("Dashboard")
+            .toolbar {
+                            ToolbarItem(placement: .navigationBarTrailing) {
+                                Button(action: {
+                                    photoManager.requestAccessAndFetch()
+                                }) {
+                                    Image(systemName: "arrow.clockwise")
+                                }
+                            }
+                        }
         }
     }
 }
 
-// --- PAGE 2: The Results Page ---
-struct ResultsView: View {
+// A small helper view to keep code clean (like a component in React)
+struct StatView: View {
+    var label: String
+    var value: Int
+    var color: Color = .primary
+    
     var body: some View {
         VStack {
-            Text("We found 20 duplicates!")
-                .font(.title2)
-            
-            List {
-                Text("Tree_Photo_1.jpg")
-                Text("Tree_Photo_2.jpg")
-                Text("Tree_Photo_3.jpg")
+            Text("\(value)")
+                .font(.title).bold()
+                .foregroundColor(color)
+            Text(label)
+                .font(.caption)
+        }
+    }
+}
+
+// Update the ResultsView to accept data
+struct ResultsView: View {
+    let count: Int
+    
+    var body: some View {
+        VStack {
+            Text("Found \(count) Screenshots")
+                .font(.headline)
+            List(0..<count, id: \.self) { _ in
+                Text("Screenshot Preview Placeholder")
+                
             }
         }
-        .navigationTitle("Scanning Results") // 3. Back button appears automatically
+        .navigationTitle("Clean Up")
     }
 }
 
