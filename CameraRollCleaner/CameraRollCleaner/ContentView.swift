@@ -1,7 +1,7 @@
 import SwiftUI
+import Photos // Essential for PHAsset
 
 struct ContentView: View {
-    // We create the manager here once
     @StateObject var photoManager = PhotoManager()
 
     var body: some View {
@@ -10,7 +10,6 @@ struct ContentView: View {
                 Text("AI Photo Cleaner")
                     .font(.largeTitle).bold()
                 
-                // Dashboard stats
                 HStack(spacing: 40) {
                     StatView(label: "Total", value: photoManager.photoCount)
                     StatView(label: "Screenshots", value: photoManager.screenshotCount, color: .red)
@@ -25,9 +24,8 @@ struct ContentView: View {
                     }
                     .buttonStyle(.borderedProminent)
                 } else {
-                    // Navigate to the results page
-                    NavigationLink(destination: ResultsView(count: photoManager.screenshotCount)) {
-                        Text("Review Screenshots")
+                    NavigationLink(destination: ResultsView(assets: photoManager.screenshotAssets)) {
+                        Text("Review \(photoManager.screenshotCount) Screenshots")
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color.blue)
@@ -39,19 +37,18 @@ struct ContentView: View {
             .padding()
             .navigationTitle("Dashboard")
             .toolbar {
-                            ToolbarItem(placement: .navigationBarTrailing) {
-                                Button(action: {
-                                    photoManager.requestAccessAndFetch()
-                                }) {
-                                    Image(systemName: "arrow.clockwise")
-                                }
-                            }
-                        }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: {
+                        photoManager.requestAccessAndFetch()
+                    }) {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                }
+            }
         }
     }
 }
 
-// A small helper view to keep code clean (like a component in React)
 struct StatView: View {
     var label: String
     var value: Int
@@ -68,20 +65,59 @@ struct StatView: View {
     }
 }
 
-// Update the ResultsView to accept data
 struct ResultsView: View {
-    let count: Int
+    let assets: [PHAsset]
     
+    let columns = [
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2)
+    ]
+
     var body: some View {
-        VStack {
-            Text("Found \(count) Screenshots")
-                .font(.headline)
-            List(0..<count, id: \.self) { _ in
-                Text("Screenshot Preview Placeholder")
-                
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 2) {
+                ForEach(assets, id: \.localIdentifier) { asset in
+                    PhotoThumbnail(asset: asset)
+                        .frame(height: 120)
+                        .clipped()
+                }
             }
         }
-        .navigationTitle("Clean Up")
+        .navigationTitle("Screenshots")
+    }
+}
+
+struct PhotoThumbnail: View {
+    let asset: PHAsset
+    @State private var image: UIImage? = nil
+
+    var body: some View {
+        Group {
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Color.gray.opacity(0.2)
+            }
+        }
+        .onAppear {
+            loadImage()
+        }
+    }
+
+    func loadImage() {
+        let manager = PHImageManager.default()
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .opportunistic
+        
+        manager.requestImage(for: asset,
+                             targetSize: CGSize(width: 200, height: 200),
+                             contentMode: .aspectFill,
+                             options: options) { result, _ in
+            self.image = result
+        }
     }
 }
 

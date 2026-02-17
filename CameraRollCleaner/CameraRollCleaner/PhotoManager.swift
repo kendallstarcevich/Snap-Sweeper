@@ -6,7 +6,8 @@ class PhotoManager: ObservableObject {
     @Published var photoCount = 0
     @Published var screenshotCount = 0
     @Published var isAuthorized = false
-    
+    @Published var screenshotAssets: [PHAsset] = [] // Holds the actual photo objects
+
     func requestAccessAndFetch() {
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
             DispatchQueue.main.async {
@@ -19,61 +20,24 @@ class PhotoManager: ObservableObject {
     }
     
     private func fetchMetadata() {
+        // Fetch all photos to get the total count
         let allPhotos = PHAsset.fetchAssets(with: .image, options: nil)
         self.photoCount = allPhotos.count
+
+        // Setup options to specifically find screenshots
+        let screenshotOptions = PHFetchOptions()
+        screenshotOptions.predicate = NSPredicate(format: "mediaSubtype == %d", PHAssetMediaSubtype.photoScreenshot.rawValue)
         
-        // 1. Create a dynamic array to hold our findings
-        var foundScreenshots = 0
+        let results = PHAsset.fetchAssets(with: .image, options: screenshotOptions)
         
-        // 2. Loop through the photos and check for signs of a screenshot
-        allPhotos.enumerateObjects { (asset, index, stop) in
-            // Check A: The official Apple Subtype
-            let isOfficialScreenshot = asset.mediaSubtypes.contains(.photoScreenshot)
-            
-            // Check B: The "Simulator" check (Simulators often omit the subtype)
-            // We can check if the metadata suggests it's a screenshot
-            if isOfficialScreenshot {
-                foundScreenshots += 1
-            }
+        // Convert the "FetchResult" into a standard Swift Array so the UI can use it easily
+        var tempAssets: [PHAsset] = []
+        results.enumerateObjects { (asset, _, _) in
+            tempAssets.append(asset)
         }
-        
-        self.screenshotCount = foundScreenshots
-    }
-    
-    struct PhotoThumbnail: View {
-        let asset: PHAsset
-        @State private var image: UIImage? = nil
-        
-        var body: some View {
-            Group {
-                if let image = image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .onAppear {
-                            loadThumbnail()
-                        }
-                }
-            }
-            .frame(width: 100, height: 100)
-            .clipped()
-        }
-        
-        func loadThumbnail() {
-            let manager = PHImageManager.default()
-            let options = PHImageRequestOptions()
-            options.isSynchronous = false // Don't freeze the app!
-            options.deliveryMode = .opportunistic
-            
-            manager.requestImage(for: asset,
-                                 targetSize: CGSize(width: 200, height: 200),
-                                 contentMode: .aspectFill,
-                                 options: options) { result, _ in
-                self.image = result
-            }
-        }
+
+        self.screenshotAssets = tempAssets
+        self.screenshotCount = tempAssets.count
     }
 }
+// DO NOT PUT THE PHOTO THUMBNAIL STRUCT INSIDE THE CLASS ABOVE
