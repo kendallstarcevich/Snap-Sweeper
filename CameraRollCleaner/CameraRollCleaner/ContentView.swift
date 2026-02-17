@@ -68,19 +68,27 @@ struct StatView: View {
 
 struct ResultsView: View {
     let assets: [PHAsset]
-    @ObservedObject var photoManager: PhotoManager // Add this line
+    @ObservedObject var photoManager: PhotoManager
     @StateObject var selectionManager = SelectionManager()
-    @State private var hasInitialSelected = false // NEW: Track if we've already done the "Select All"
+    @State private var hasInitialSelected = false
     
     let columns = [
-        GridItem(.flexible(), spacing: 2),
-        GridItem(.flexible(), spacing: 2),
-        GridItem(.flexible(), spacing: 2)
+        GridItem(.flexible(), spacing: 4),
+        GridItem(.flexible(), spacing: 4),
+        GridItem(.flexible(), spacing: 4)
     ]
-
+    
+    var formattedSize: String {
+        let bytes = selectionManager.calculateTotalSize(assets: assets)
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useGB, .useMB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: bytes)
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
-            // Header with Selection Controls
+            // --- HEADER SECTION ---
             HStack {
                 Text("\(selectionManager.selectedAssetIDs.count) selected")
                     .font(.subheadline)
@@ -98,11 +106,11 @@ struct ResultsView: View {
             .padding()
             .background(Color(UIColor.secondarySystemBackground))
 
+            // --- GRID SECTION ---
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 2) {
+                LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(assets, id: \.localIdentifier) { asset in
                         ZStack(alignment: .topTrailing) {
-                            // 1. THE MAIN LINK (Tapping photo opens detail)
                             NavigationLink(destination: PhotoDetailView(asset: asset)) {
                                 PhotoThumbnail(asset: asset)
                                     .frame(minWidth: 0, maxWidth: .infinity)
@@ -112,45 +120,53 @@ struct ResultsView: View {
                                     .cornerRadius(4)
                             }
                             .buttonStyle(.plain)
+                            .zIndex(0)
 
-                            // 2. THE SELECTION OVERLAY (Tapping icon selects)
-                            Button(action: {
-                                selectionManager.toggleSelection(id: asset.localIdentifier)
-                            }) {
-                                Image(systemName: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle")
-                                    .font(.system(size: 24))
-                                    .foregroundStyle(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? .blue : .white)
-                                    .shadow(radius: 2)
-                                    .padding(8)
-                            }
+                            // The Checkmark Icon
+                            Image(systemName: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 24))
+                                .foregroundStyle(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? .blue : .white)
+                                .shadow(radius: 2)
+                                .padding(8)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    selectionManager.toggleSelection(id: asset.localIdentifier)
+                                }
+                                .zIndex(1)
                         }
                     }
                 }
                 .padding(.horizontal, 2)
+                .padding(.top, 4)
             }
             
-            // The Big Delete Button
+            // --- SUMMARY BAR SECTION (This sits at the bottom) ---
             if !selectionManager.selectedAssetIDs.isEmpty {
-                // Look for the Button(action: { ... }) { Text("Delete Selected Photos") ... }
-                Button(action: {
-                    // We access the photoManager from the parent view
-                    // Note: You may need to pass the photoManager into ResultsView as an @ObservedObject
-                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
-                        if success {
-                            // Clear selections after a successful delete
-                            selectionManager.deselectAll()
-                        }
+                VStack(spacing: 12) {
+                    HStack {
+                        Image(systemName: "info.circle")
+                        Text("You will save \(Text(formattedSize).bold()) of space.")
                     }
-                }) {
-                    Text("Delete Selected Photos")
-                        .bold()
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.red)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+
+                    Button(action: {
+                        photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                            if success { selectionManager.deselectAll() }
+                        }
+                    }) {
+                        Text("Delete \(selectionManager.selectedAssetIDs.count) Photos")
+                            .bold()
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.red)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                    }
                 }
                 .padding()
+                .background(Color(UIColor.systemBackground))
+                .shadow(color: .black.opacity(0.1), radius: 10, y: -5)
                 .transition(.move(edge: .bottom))
             }
         }
@@ -159,7 +175,8 @@ struct ResultsView: View {
         .onAppear {
             if !hasInitialSelected {
                 selectionManager.selectAll(assets: assets)
-                hasInitialSelected = true}
+                hasInitialSelected = true
+            }
         }
     }
 }

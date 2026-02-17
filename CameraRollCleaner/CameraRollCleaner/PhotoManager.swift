@@ -28,6 +28,29 @@ class PhotoManager: ObservableObject {
             }
         }
     }
+    
+    // Add this to your PhotoManager class
+    func getSize(for asset: PHAsset) -> Int64 {
+        let resources = PHAssetResource.assetResources(for: asset)
+        return resources.first?.value(forKey: "fileSize") as? Int64 ?? 0
+    }
+
+    func sortAssets(by strategy: SortStrategy) {
+        switch strategy {
+        case .oldest:
+            screenshotAssets.sort { ($0.creationDate ?? Date()) < ($1.creationDate ?? Date()) }
+        case .largest:
+            screenshotAssets.sort { getSize(for: $0) > getSize(for: $1) }
+        case .newest:
+            screenshotAssets.sort { ($0.creationDate ?? Date()) > ($1.creationDate ?? Date()) }
+        }
+    }
+
+    enum SortStrategy: String, CaseIterable {
+        case newest = "Newest First"
+        case oldest = "Oldest First"
+        case largest = "Largest Size"
+    }
 
     func requestAccessAndFetch() {
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in

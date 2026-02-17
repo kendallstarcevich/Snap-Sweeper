@@ -26,3 +26,21 @@ class SelectionManager: ObservableObject {
         }
     }
 }
+
+
+extension SelectionManager {
+    func calculateTotalSize(assets: [PHAsset]) -> Int64 {
+        let selectedAssets = assets.filter { selectedAssetIDs.contains($0.localIdentifier) }
+        var totalBytes: Int64 = 0
+        
+        for asset in selectedAssets {
+            let resources = PHAssetResource.assetResources(for: asset)
+            for resource in resources {
+                if let unsignedBytes = resource.value(forKey: "fileSize") as? Int64 {
+                    totalBytes += unsignedBytes
+                }
+            }
+        }
+        return totalBytes
+    }
+}
