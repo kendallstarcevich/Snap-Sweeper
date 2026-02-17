@@ -73,54 +73,96 @@ struct ResultsView: View {
         GridItem(.flexible(), spacing: 2),
         GridItem(.flexible(), spacing: 2)
     ]
-
+    
     var body: some View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 2) {
+                // Inside your ResultsView's ForEach loop:
                 ForEach(assets, id: \.localIdentifier) { asset in
-                    PhotoThumbnail(asset: asset)
-                        .frame(height: 120)
-                        .clipped()
+                    NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                        PhotoThumbnail(asset: asset)
+                            .frame(height: 120)
+                            .clipped()
+                    }
+                    .buttonStyle(.plain) // This removes the "blue tint" buttons usually have
                 }
             }
+            .navigationTitle("Screenshots")
         }
-        .navigationTitle("Screenshots")
     }
-}
-
-struct PhotoThumbnail: View {
-    let asset: PHAsset
-    @State private var image: UIImage? = nil
-
-    var body: some View {
-        Group {
-            if let image = image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                Color.gray.opacity(0.2)
+    
+    struct PhotoThumbnail: View {
+        let asset: PHAsset
+        @State private var image: UIImage? = nil
+        
+        var body: some View {
+            Group {
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    Color.gray.opacity(0.2)
+                }
+            }
+            .onAppear {
+                loadImage()
             }
         }
-        .onAppear {
-            loadImage()
+        
+        func loadImage() {
+            let manager = PHImageManager.default()
+            let options = PHImageRequestOptions()
+            options.deliveryMode = .opportunistic
+            
+            manager.requestImage(for: asset,
+                                 targetSize: CGSize(width: 200, height: 200),
+                                 contentMode: .aspectFill,
+                                 options: options) { result, _ in
+                self.image = result
+            }
         }
     }
-
-    func loadImage() {
-        let manager = PHImageManager.default()
-        let options = PHImageRequestOptions()
-        options.deliveryMode = .opportunistic
+    
+    
+    struct PhotoDetailView: View {
+        let asset: PHAsset
+        @State private var fullImage: UIImage? = nil
         
-        manager.requestImage(for: asset,
-                             targetSize: CGSize(width: 200, height: 200),
-                             contentMode: .aspectFill,
-                             options: options) { result, _ in
-            self.image = result
+        var body: some View {
+            VStack {
+                if let img = fullImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding()
+                } else {
+                    ProgressView("Loading high-res...") // A loading spinner
+                }
+            }
+            .navigationTitle("Preview")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                loadFullImage()
+            }
+        }
+        
+        func loadFullImage() {
+            let manager = PHImageManager.default()
+            let options = PHImageRequestOptions()
+            options.isNetworkAccessAllowed = true // Pulls from iCloud if needed
+            options.deliveryMode = .highQualityFormat
+            
+            manager.requestImage(for: asset,
+                                 targetSize: PHImageManagerMaximumSize,
+                                 contentMode: .aspectFit,
+                                 options: options) { result, _ in
+                self.fullImage = result
+            }
         }
     }
 }
-
 #Preview {
     ContentView()
 }
+
