@@ -24,7 +24,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(.borderedProminent)
                 } else {
-                    NavigationLink(destination: ResultsView(assets: photoManager.screenshotAssets)) {
+                    NavigationLink(destination: ResultsView(assets: photoManager.screenshotAssets, photoManager: photoManager)) {
                         Text("Review \(photoManager.screenshotCount) Screenshots")
                             .frame(maxWidth: .infinity)
                             .padding()
@@ -68,7 +68,9 @@ struct StatView: View {
 
 struct ResultsView: View {
     let assets: [PHAsset]
+    @ObservedObject var photoManager: PhotoManager // Add this line
     @StateObject var selectionManager = SelectionManager()
+    @State private var hasInitialSelected = false // NEW: Track if we've already done the "Select All"
     
     let columns = [
         GridItem(.flexible(), spacing: 2),
@@ -129,9 +131,16 @@ struct ResultsView: View {
             
             // The Big Delete Button
             if !selectionManager.selectedAssetIDs.isEmpty {
+                // Look for the Button(action: { ... }) { Text("Delete Selected Photos") ... }
                 Button(action: {
-                    print("Deleting \(selectionManager.selectedAssetIDs.count) photos...")
-                    // Later: photoManager.deleteSelectedPhotos(ids: selectionManager.selectedAssetIDs)
+                    // We access the photoManager from the parent view
+                    // Note: You may need to pass the photoManager into ResultsView as an @ObservedObject
+                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                        if success {
+                            // Clear selections after a successful delete
+                            selectionManager.deselectAll()
+                        }
+                    }
                 }) {
                     Text("Delete Selected Photos")
                         .bold()
@@ -148,7 +157,9 @@ struct ResultsView: View {
         .navigationTitle("Clean Up")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            selectionManager.selectAll(assets: assets)
+            if !hasInitialSelected {
+                selectionManager.selectAll(assets: assets)
+                hasInitialSelected = true}
         }
     }
 }

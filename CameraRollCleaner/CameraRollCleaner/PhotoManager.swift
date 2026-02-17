@@ -7,6 +7,27 @@ class PhotoManager: ObservableObject {
     @Published var screenshotCount = 0
     @Published var isAuthorized = false
     @Published var screenshotAssets: [PHAsset] = [] // Holds the actual photo objects
+    
+    func deleteAssets(ids: Set<String>, completion: @escaping (Bool) -> Void) {
+        // 1. Fetch the actual objects using the IDs
+        let assetsToDelete = PHAsset.fetchAssets(withLocalIdentifiers: Array(ids), options: nil)
+        
+        // 2. Ask the system to perform the change
+        PHPhotoLibrary.shared().performChanges({
+            PHAssetChangeRequest.deleteAssets(assetsToDelete)
+        }) { success, error in
+            DispatchQueue.main.async {
+                if success {
+                    // 3. Refresh our local data so the deleted photos disappear
+                    self.fetchMetadata()
+                    completion(true)
+                } else {
+                    print("Error deleting: \(String(describing: error))")
+                    completion(false)
+                }
+            }
+        }
+    }
 
     func requestAccessAndFetch() {
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
