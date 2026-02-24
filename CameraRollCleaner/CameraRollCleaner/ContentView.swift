@@ -98,7 +98,7 @@ struct ContentView: View {
                 }
                 .padding()
             }
-            .navigationTitle("Camera Roll Cleaner")
+            .navigationTitle("Snap Sweep")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
