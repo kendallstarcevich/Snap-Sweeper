@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		523C9D9B2F3527080095B2B0 /* CameraRollCleaner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CameraRollCleaner.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		523C9D9B2F3527080095B2B0 /* Snap Sweeper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Snap Sweeper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -40,7 +40,7 @@
 		523C9D9C2F3527080095B2B0 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				523C9D9B2F3527080095B2B0 /* CameraRollCleaner.app */,
+				523C9D9B2F3527080095B2B0 /* Snap Sweeper.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,9 +48,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		523C9D9A2F3527080095B2B0 /* CameraRollCleaner */ = {
+		523C9D9A2F3527080095B2B0 /* Snap Sweeper */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 523C9DA62F3527090095B2B0 /* Build configuration list for PBXNativeTarget "CameraRollCleaner" */;
+			buildConfigurationList = 523C9DA62F3527090095B2B0 /* Build configuration list for PBXNativeTarget "Snap Sweeper" */;
 			buildPhases = (
 				523C9D972F3527080095B2B0 /* Sources */,
 				523C9D982F3527080095B2B0 /* Frameworks */,
@@ -63,11 +63,11 @@
 			fileSystemSynchronizedGroups = (
 				523C9D9D2F3527080095B2B0 /* CameraRollCleaner */,
 			);
-			name = CameraRollCleaner;
+			name = "Snap Sweeper";
 			packageProductDependencies = (
 			);
 			productName = CameraRollCleaner;
-			productReference = 523C9D9B2F3527080095B2B0 /* CameraRollCleaner.app */;
+			productReference = 523C9D9B2F3527080095B2B0 /* Snap Sweeper.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -85,7 +85,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 523C9D962F3527080095B2B0 /* Build configuration list for PBXProject "CameraRollCleaner" */;
+			buildConfigurationList = 523C9D962F3527080095B2B0 /* Build configuration list for PBXProject "Snap Sweeper" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -99,7 +99,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				523C9D9A2F3527080095B2B0 /* CameraRollCleaner */,
+				523C9D9A2F3527080095B2B0 /* Snap Sweeper */,
 			);
 		};
 /* End PBXProject section */
@@ -315,7 +315,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		523C9D962F3527080095B2B0 /* Build configuration list for PBXProject "CameraRollCleaner" */ = {
+		523C9D962F3527080095B2B0 /* Build configuration list for PBXProject "Snap Sweeper" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				523C9DA42F3527090095B2B0 /* Debug */,
@@ -324,7 +324,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		523C9DA62F3527090095B2B0 /* Build configuration list for PBXNativeTarget "CameraRollCleaner" */ = {
+		523C9DA62F3527090095B2B0 /* Build configuration list for PBXNativeTarget "Snap Sweeper" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				523C9DA72F3527090095B2B0 /* Debug */,
