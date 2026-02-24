@@ -117,7 +117,7 @@ struct ResultsView: View {
                 LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(photoManager.screenshotAssets, id: \.localIdentifier) { asset in
                         ZStack(alignment: .topTrailing) {
-                            NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager)) {
+                            NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
                                 PhotoThumbnail(asset: asset)
                                     .frame(minWidth: 0, maxWidth: .infinity)
                                     .aspectRatio(1, contentMode: .fill)
@@ -210,22 +210,48 @@ struct PhotoThumbnail: View {
 struct PhotoDetailView: View {
     let asset: PHAsset
     let photoManager: PhotoManager
+    @ObservedObject var selectionManager: SelectionManager // Add this to connect the state
     @State private var fullImage: UIImage? = nil
     
     var body: some View {
         VStack(spacing: 20) {
             if let img = fullImage {
-                Image(uiImage: img).resizable().aspectRatio(contentMode: .fit).padding()
+                Image(uiImage: img)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .padding()
             } else {
                 ProgressView()
             }
             
-            VStack(spacing: 8) {
-                Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown Date")
+            VStack(spacing: 15) {
+                // Metadata
+                VStack(spacing: 4) {
+                    Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown Date")
+                        .font(.headline)
+                    Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+
+                // NEW: Selection Toggle Button
+                Button(action: {
+                    selectionManager.toggleSelection(id: asset.localIdentifier)
+                    // Optional: Add haptics here
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }) {
+                    Label(
+                        selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "Selected for Deletion" : "Mark for Deletion",
+                        systemImage: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle"
+                    )
                     .font(.headline)
-                Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? Color.blue : Color.gray)
+                    .cornerRadius(10)
+                }
+                .padding(.horizontal)
             }
             .padding(.bottom, 30)
         }
@@ -238,3 +264,8 @@ struct PhotoDetailView: View {
         }
     }
 }
+#Preview {
+    // Just a placeholder for the preview to work
+    PhotoDetailView(asset: PHAsset(), photoManager: PhotoManager(), selectionManager: SelectionManager())
+}
+
