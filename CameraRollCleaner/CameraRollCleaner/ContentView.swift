@@ -71,7 +71,8 @@ struct ResultsView: View {
     @ObservedObject var photoManager: PhotoManager
     @StateObject var selectionManager = SelectionManager()
     @State private var hasInitialSelected = false
-    
+    @State private var currentSort: PhotoManager.SortStrategy = .newest
+
     let columns = [
         GridItem(.flexible(), spacing: 4),
         GridItem(.flexible(), spacing: 4),
@@ -79,29 +80,34 @@ struct ResultsView: View {
     ]
     
     var formattedSize: String {
-        let bytes = selectionManager.calculateTotalSize(assets: assets)
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useGB, .useMB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
+        let bytes = selectionManager.calculateTotalSize(assets: photoManager.screenshotAssets)
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // --- HEADER SECTION ---
             HStack {
-                Text("\(selectionManager.selectedAssetIDs.count) selected")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                Menu {
+                    ForEach(PhotoManager.SortStrategy.allCases, id: \.self) { strategy in
+                        Button(strategy.rawValue) {
+                            currentSort = strategy
+                            photoManager.sortAssets(by: strategy)
+                        }
+                    }
+                } label: {
+                    Label("Sort", systemImage: "line.3.horizontal.decrease.circle")
+                }
+                
                 Spacer()
-                Button(selectionManager.selectedAssetIDs.count == assets.count ? "Deselect All" : "Select All") {
-                    if selectionManager.selectedAssetIDs.count == assets.count {
+                
+                Button(selectionManager.selectedAssetIDs.count == photoManager.screenshotAssets.count ? "Deselect All" : "Select All") {
+                    if selectionManager.selectedAssetIDs.count == photoManager.screenshotAssets.count {
                         selectionManager.deselectAll()
                     } else {
-                        selectionManager.selectAll(assets: assets)
+                        selectionManager.selectAll(assets: photoManager.screenshotAssets)
                     }
                 }
-                .font(.subheadline)
             }
             .padding()
             .background(Color(UIColor.secondarySystemBackground))
@@ -109,9 +115,9 @@ struct ResultsView: View {
             // --- GRID SECTION ---
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 4) {
-                    ForEach(assets, id: \.localIdentifier) { asset in
+                    ForEach(photoManager.screenshotAssets, id: \.localIdentifier) { asset in
                         ZStack(alignment: .topTrailing) {
-                            NavigationLink(destination: PhotoDetailView(asset: asset)) {
+                            NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager)) {
                                 PhotoThumbnail(asset: asset)
                                     .frame(minWidth: 0, maxWidth: .infinity)
                                     .aspectRatio(1, contentMode: .fill)
@@ -122,7 +128,6 @@ struct ResultsView: View {
                             .buttonStyle(.plain)
                             .zIndex(0)
 
-                            // The Checkmark Icon
                             Image(systemName: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle")
                                 .font(.system(size: 24))
                                 .foregroundStyle(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? .blue : .white)
@@ -140,7 +145,7 @@ struct ResultsView: View {
                 .padding(.top, 4)
             }
             
-            // --- SUMMARY BAR SECTION (This sits at the bottom) ---
+            // --- SUMMARY BAR SECTION ---
             if !selectionManager.selectedAssetIDs.isEmpty {
                 VStack(spacing: 12) {
                     HStack {
@@ -174,7 +179,7 @@ struct ResultsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if !hasInitialSelected {
-                selectionManager.selectAll(assets: assets)
+                selectionManager.selectAll(assets: photoManager.screenshotAssets)
                 hasInitialSelected = true
             }
         }
@@ -184,73 +189,52 @@ struct ResultsView: View {
 struct PhotoThumbnail: View {
     let asset: PHAsset
     @State private var image: UIImage? = nil
-    
     var body: some View {
         Group {
             if let image = image {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+                Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
             } else {
                 Color.gray.opacity(0.2)
             }
         }
         .onAppear {
-            loadImage()
-        }
-    }
-    
-    func loadImage() {
-        let manager = PHImageManager.default()
-        let options = PHImageRequestOptions()
-        options.deliveryMode = .opportunistic
-        
-        manager.requestImage(for: asset,
-                             targetSize: CGSize(width: 250, height: 250),
-                             contentMode: .aspectFill,
-                             options: options) { result, _ in
-            self.image = result
+            let options = PHImageRequestOptions()
+            options.deliveryMode = .opportunistic
+            PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 250, height: 250), contentMode: .aspectFill, options: options) { result, _ in
+                self.image = result
+            }
         }
     }
 }
 
 struct PhotoDetailView: View {
     let asset: PHAsset
+    let photoManager: PhotoManager
     @State private var fullImage: UIImage? = nil
     
     var body: some View {
-        VStack {
+        VStack(spacing: 20) {
             if let img = fullImage {
-                Image(uiImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .padding()
+                Image(uiImage: img).resizable().aspectRatio(contentMode: .fit).padding()
             } else {
-                ProgressView("Loading high-res...")
+                ProgressView()
+            }
+            
+            VStack(spacing: 8) {
+                Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown Date")
+                    .font(.headline)
+                Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.bottom, 30)
+        }
+        .onAppear {
+            let options = PHImageRequestOptions()
+            options.isNetworkAccessAllowed = true
+            PHImageManager.default().requestImage(for: asset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: options) { result, _ in
+                self.fullImage = result
             }
         }
-        .navigationTitle("Preview")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            loadFullImage()
-        }
     }
-    
-    func loadFullImage() {
-        let manager = PHImageManager.default()
-        let options = PHImageRequestOptions()
-        options.isNetworkAccessAllowed = true
-        options.deliveryMode = .highQualityFormat
-        
-        manager.requestImage(for: asset,
-                             targetSize: PHImageManagerMaximumSize,
-                             contentMode: .aspectFit,
-                             options: options) { result, _ in
-            self.fullImage = result
-        }
-    }
-}
-
-#Preview {
-    ContentView()
 }
