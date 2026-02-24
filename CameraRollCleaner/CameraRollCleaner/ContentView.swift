@@ -27,48 +27,83 @@ class StorageManager {
 struct ContentView: View {
     @StateObject var photoManager = PhotoManager()
     @State private var storageInfo = StorageManager.getStorageInfo()
-    
+
+    // Define the layout for our action buttons (2 columns)
+    let actionColumns = [
+        GridItem(.flexible(), spacing: 15),
+        GridItem(.flexible(), spacing: 15)
+    ]
+
     var body: some View {
         NavigationStack {
-            ScrollView{
+            ScrollView {
                 VStack(spacing: 25) {
-                    Text("AI Photo Cleaner")
-                        .font(.largeTitle).bold()
+                    
+                    // 1. THE STORAGE HERO SECTION
                     StorageGaugeView(
                         usedBytes: storageInfo.usedBytes,
                         totalBytes: storageInfo.totalBytes,
                         deletedBytes: photoManager.totalBytesDeleted
-                    )}
-                HStack(spacing: 40) {
-                    StatView(label: "Total", value: photoManager.photoCount)
-                    StatView(label: "Screenshots", value: photoManager.screenshotCount, color: .red)
+                    )
+                    .padding(.top)
+
+                    // 2. QUICK ACTIONS SECTION
+                    VStack(alignment: .leading, spacing: 15) {
+                        Text("Smart Clean Actions")
+                            .font(.title2).bold()
+                        
+                        LazyVGrid(columns: actionColumns, spacing: 15) {
+                            
+                            // ACTION: Screenshots (The one that works!)
+                            NavigationLink(destination: ResultsView(assets: photoManager.screenshotAssets, photoManager: photoManager)) {
+                                ActionCard(
+                                    title: "Screenshots",
+                                    count: photoManager.screenshotCount,
+                                    icon: "iphone.gen1",
+                                    color: .blue
+                                )
+                            }
+                            
+                            // PLACEHOLDER: Blurry Photos
+                            NavigationLink(destination: Text("Blurry Scan Coming Soon")) {
+                                ActionCard(
+                                    title: "Blurry Photos",
+                                    count: 0,
+                                    icon: "eye.slash.fill",
+                                    color: .orange
+                                )
+                            }
+                            
+                            // PLACEHOLDER: Duplicates
+                            NavigationLink(destination: Text("Duplicate Scan Coming Soon")) {
+                                ActionCard(
+                                    title: "Duplicates",
+                                    count: 0,
+                                    icon: "square.on.square.fill",
+                                    color: .purple
+                                )
+                            }
+                            
+                            // PLACEHOLDER: Large Videos
+                            NavigationLink(destination: Text("Video Scan Coming Soon")) {
+                                ActionCard(
+                                    title: "Large Videos",
+                                    count: 0,
+                                    icon: "video.fill",
+                                    color: .green
+                                )
+                            }
+                        }
+                    }
                 }
                 .padding()
-                .background(Color.gray.opacity(0.1))
-                .cornerRadius(15)
-
-                if !photoManager.isAuthorized {
-                    Button("Grant Library Access") {
-                        photoManager.requestAccessAndFetch()
-                    }
-                    .buttonStyle(.borderedProminent)
-                } else {
-                    NavigationLink(destination: ResultsView(assets: photoManager.screenshotAssets, photoManager: photoManager)) {
-                        Text("Review \(photoManager.screenshotCount) Screenshots")
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                    }
-                }
             }
-            .padding()
-            .navigationTitle("Dashboard")
+            .navigationTitle("Camera Roll Cleaner")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         photoManager.requestAccessAndFetch()
+                        storageInfo = StorageManager.getStorageInfo() // Refresh storage too
                     }) {
                         Image(systemName: "arrow.clockwise")
                     }
@@ -340,6 +375,43 @@ struct PhotoDetailView: View {
         }
     }
 }
+
+
+struct ActionCard: View {
+    let title: String
+    let count: Int
+    let icon: String
+    let color: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(color)
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                Text(count > 0 ? "\(count) items found" : "Scan to start")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(UIColor.secondarySystemBackground))
+        .cornerRadius(15)
+    }
+}
+
+
 #Preview {
     // Just a placeholder for the preview to work
     PhotoDetailView(asset: PHAsset(), photoManager: PhotoManager(), selectionManager: SelectionManager())
