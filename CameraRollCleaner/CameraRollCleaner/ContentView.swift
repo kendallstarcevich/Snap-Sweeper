@@ -1,15 +1,44 @@
 import SwiftUI
 import Photos
+import Foundation
+
+
+struct StorageInfo {
+    let totalBytes: Int64
+    let availableBytes: Int64
+    var usedBytes: Int64 { totalBytes - availableBytes }
+}
+
+class StorageManager {
+    static func getStorageInfo() -> StorageInfo {
+        let fileURL = URL(fileURLWithPath: NSHomeDirectory())
+        do {
+            let values = try fileURL.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey])
+            let total = Int64(values.volumeTotalCapacity ?? 0)
+            let available = values.volumeAvailableCapacityForImportantUsage ?? 0
+            return StorageInfo(totalBytes: total, availableBytes: available)
+        } catch {
+            return StorageInfo(totalBytes: 0, availableBytes: 0)
+        }
+    }
+}
+
 
 struct ContentView: View {
     @StateObject var photoManager = PhotoManager()
-
+    @State private var storageInfo = StorageManager.getStorageInfo()
+    
     var body: some View {
         NavigationStack {
-            VStack(spacing: 25) {
-                Text("AI Photo Cleaner")
-                    .font(.largeTitle).bold()
-                
+            ScrollView{
+                VStack(spacing: 25) {
+                    Text("AI Photo Cleaner")
+                        .font(.largeTitle).bold()
+                    StorageGaugeView(
+                        usedBytes: storageInfo.usedBytes,
+                        totalBytes: storageInfo.totalBytes,
+                        deletedBytes: photoManager.totalBytesDeleted
+                    )}
                 HStack(spacing: 40) {
                     StatView(label: "Total", value: photoManager.photoCount)
                     StatView(label: "Screenshots", value: photoManager.screenshotCount, color: .red)
@@ -204,6 +233,53 @@ struct PhotoThumbnail: View {
                 self.image = result
             }
         }
+    }
+}
+
+struct StorageGaugeView: View {
+    let usedBytes: Int64
+    let totalBytes: Int64
+    let deletedBytes: Int64
+    
+    var usedPercentage: Double {
+        Double(usedBytes) / Double(totalBytes)
+    }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // 1. THE MAIN STORAGE GAUGE
+            Gauge(value: usedPercentage, in: 0...1) {
+                Text("Storage Used")
+            } currentValueLabel: {
+                Text("\(Int(usedPercentage * 100))%")
+            } minimumValueLabel: {
+                Text("0")
+            } maximumValueLabel: {
+                Text("100")
+            }
+            .gaugeStyle(.accessoryLinear) // Or use .accessoryCircular for a "speedometer" look
+            .tint(Gradient(colors: [.blue, .purple, .red]))
+            
+            // 2. THE "LIFETIME CLEANED" STAT
+            HStack {
+                VStack(alignment: .leading) {
+                    Text("Cleaned to Date")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(ByteCountFormatter.string(fromByteCount: deletedBytes, countStyle: .file))
+                        .font(.title3).bold()
+                        .foregroundColor(.green)
+                }
+                Spacer()
+                Image(systemName: "leaf.fill")
+                    .foregroundColor(.green)
+                    .font(.title)
+            }
+            .padding()
+            .background(Color.green.opacity(0.1))
+            .cornerRadius(12)
+        }
+        .padding()
     }
 }
 

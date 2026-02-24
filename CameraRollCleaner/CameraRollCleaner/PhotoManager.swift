@@ -7,6 +7,9 @@ class PhotoManager: ObservableObject {
     @Published var screenshotCount = 0
     @Published var isAuthorized = false
     @Published var screenshotAssets: [PHAsset] = []
+    
+    // Use UserDefaults for persistence in a Class
+    @Published var totalBytesDeleted: Int64 = UserDefaults.standard.value(forKey: "bytesDeleted") as? Int64 ?? 0
 
     enum SortStrategy: String, CaseIterable {
         case newest = "Newest First"
@@ -54,19 +57,34 @@ class PhotoManager: ObservableObject {
         
         self.screenshotAssets = tempAssets
         self.screenshotCount = tempAssets.count
-        self.sortAssets(by: .newest) // Default sort
+        self.sortAssets(by: .newest)
     }
 
     func deleteAssets(ids: Set<String>, completion: @escaping (Bool) -> Void) {
+        // 1. Fetch the assets first
         let assetsToDelete = PHAsset.fetchAssets(withLocalIdentifiers: Array(ids), options: nil)
+        
+        // 2. Calculate the size of what we are about to delete
+        var sizeOfDeletion: Int64 = 0
+        assetsToDelete.enumerateObjects { (asset, _, _) in
+            sizeOfDeletion += self.getSize(for: asset)
+        }
+        
+        // 3. Perform the system change
         PHPhotoLibrary.shared().performChanges({
             PHAssetChangeRequest.deleteAssets(assetsToDelete)
         }) { success, _ in
             DispatchQueue.main.async {
                 if success {
+                    // Update our lifetime deleted stat
+                    self.totalBytesDeleted += sizeOfDeletion
+                    UserDefaults.standard.set(self.totalBytesDeleted, forKey: "bytesDeleted")
+                    
                     self.fetchMetadata()
                     completion(true)
-                } else { completion(false) }
+                } else {
+                    completion(false)
+                }
             }
         }
     }
