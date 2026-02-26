@@ -11,9 +11,9 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		523C9D9D2F3527080095B2B0 /* CameraRollCleaner */ = {
+		523C9D9D2F3527080095B2B0 /* Swift Code */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = CameraRollCleaner;
+			path = "Swift Code";
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -32,7 +32,7 @@
 		523C9D922F3527080095B2B0 = {
 			isa = PBXGroup;
 			children = (
-				523C9D9D2F3527080095B2B0 /* CameraRollCleaner */,
+				523C9D9D2F3527080095B2B0 /* Swift Code */,
 				523C9D9C2F3527080095B2B0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -61,7 +61,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				523C9D9D2F3527080095B2B0 /* CameraRollCleaner */,
+				523C9D9D2F3527080095B2B0 /* Swift Code */,
 			);
 			name = "Snap Sweeper";
 			packageProductDependencies = (

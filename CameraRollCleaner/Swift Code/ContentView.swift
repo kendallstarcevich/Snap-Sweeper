@@ -2,7 +2,7 @@ import SwiftUI
 import Photos
 import Foundation
 
-
+// MARK: - Storage Models
 struct StorageInfo {
     let totalBytes: Int64
     let availableBytes: Int64
@@ -23,12 +23,11 @@ class StorageManager {
     }
 }
 
-
+// MARK: - Main Dashboard
 struct ContentView: View {
     @StateObject var photoManager = PhotoManager()
     @State private var storageInfo = StorageManager.getStorageInfo()
 
-    // Define the layout for our action buttons (2 columns)
     let actionColumns = [
         GridItem(.flexible(), spacing: 15),
         GridItem(.flexible(), spacing: 15)
@@ -39,7 +38,6 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 25) {
                     
-                    // 1. THE STORAGE HERO SECTION
                     StorageGaugeView(
                         usedBytes: storageInfo.usedBytes,
                         totalBytes: storageInfo.totalBytes,
@@ -47,14 +45,12 @@ struct ContentView: View {
                     )
                     .padding(.top)
 
-                    // 2. QUICK ACTIONS SECTION
                     VStack(alignment: .leading, spacing: 15) {
                         Text("Smart Clean Actions")
                             .font(.title2).bold()
                         
                         LazyVGrid(columns: actionColumns, spacing: 15) {
                             
-                            // ACTION: Screenshots (The one that works!)
                             NavigationLink(destination: ResultsView(assets: photoManager.screenshotAssets, photoManager: photoManager)) {
                                 ActionCard(
                                     title: "Screenshots",
@@ -64,7 +60,15 @@ struct ContentView: View {
                                 )
                             }
                             
-                            // PLACEHOLDER: Blurry Photos
+                            NavigationLink(destination: ProtectedPhotosView(photoManager: photoManager)) {
+                                ActionCard(
+                                    title: "Do Not Delete",
+                                    count: photoManager.protectedAssetIDs.count,
+                                    icon: "shield.checkered",
+                                    color: .green
+                                )
+                            }
+                            
                             NavigationLink(destination: Text("Blurry Scan Coming Soon")) {
                                 ActionCard(
                                     title: "Blurry Photos",
@@ -74,7 +78,6 @@ struct ContentView: View {
                                 )
                             }
                             
-                            // PLACEHOLDER: Duplicates
                             NavigationLink(destination: Text("Duplicate Scan Coming Soon")) {
                                 ActionCard(
                                     title: "Duplicates",
@@ -84,7 +87,6 @@ struct ContentView: View {
                                 )
                             }
                             
-                            // PLACEHOLDER: Large Videos
                             NavigationLink(destination: Text("Video Scan Coming Soon")) {
                                 ActionCard(
                                     title: "Large Videos",
@@ -103,7 +105,7 @@ struct ContentView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
                         photoManager.requestAccessAndFetch()
-                        storageInfo = StorageManager.getStorageInfo() // Refresh storage too
+                        storageInfo = StorageManager.getStorageInfo()
                     }) {
                         Image(systemName: "arrow.clockwise")
                     }
@@ -144,13 +146,12 @@ struct ResultsView: View {
     ]
     
     var formattedSize: String {
-        let bytes = selectionManager.calculateTotalSize(assets: photoManager.screenshotAssets)
+        let bytes = selectionManager.calculateTotalSize(assets: assets)
         return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            // --- HEADER SECTION ---
             HStack {
                 Menu {
                     ForEach(PhotoManager.SortStrategy.allCases, id: \.self) { strategy in
@@ -165,21 +166,20 @@ struct ResultsView: View {
                 
                 Spacer()
                 
-                Button(selectionManager.selectedAssetIDs.count == photoManager.screenshotAssets.count ? "Deselect All" : "Select All") {
-                    if selectionManager.selectedAssetIDs.count == photoManager.screenshotAssets.count {
+                Button(selectionManager.selectedAssetIDs.count == assets.count ? "Deselect All" : "Select All") {
+                    if selectionManager.selectedAssetIDs.count == assets.count {
                         selectionManager.deselectAll()
                     } else {
-                        selectionManager.selectAll(assets: photoManager.screenshotAssets)
+                        selectionManager.selectAll(assets: assets)
                     }
                 }
             }
             .padding()
             .background(Color(UIColor.secondarySystemBackground))
 
-            // --- GRID SECTION ---
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 4) {
-                    ForEach(photoManager.screenshotAssets, id: \.localIdentifier) { asset in
+                    ForEach(assets, id: \.localIdentifier) { asset in
                         ZStack(alignment: .topTrailing) {
                             NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
                                 PhotoThumbnail(asset: asset)
@@ -209,7 +209,6 @@ struct ResultsView: View {
                 .padding(.top, 4)
             }
             
-            // --- SUMMARY BAR SECTION ---
             if !selectionManager.selectedAssetIDs.isEmpty {
                 VStack(spacing: 12) {
                     HStack {
@@ -240,10 +239,9 @@ struct ResultsView: View {
             }
         }
         .navigationTitle("Clean Up")
-        .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             if !hasInitialSelected {
-                selectionManager.selectAll(assets: photoManager.screenshotAssets)
+                selectionManager.selectAll(assets: assets)
                 hasInitialSelected = true
             }
         }
@@ -277,12 +275,11 @@ struct StorageGaugeView: View {
     let deletedBytes: Int64
     
     var usedPercentage: Double {
-        Double(usedBytes) / Double(totalBytes)
+        totalBytes > 0 ? Double(usedBytes) / Double(totalBytes) : 0
     }
 
     var body: some View {
         VStack(spacing: 20) {
-            // 1. THE MAIN STORAGE GAUGE
             Gauge(value: usedPercentage, in: 0...1) {
                 Text("Storage Used")
             } currentValueLabel: {
@@ -292,10 +289,9 @@ struct StorageGaugeView: View {
             } maximumValueLabel: {
                 Text("100")
             }
-            .gaugeStyle(.accessoryLinear) // Or use .accessoryCircular for a "speedometer" look
+            .gaugeStyle(.accessoryLinear)
             .tint(Gradient(colors: [.blue, .purple, .red]))
             
-            // 2. THE "LIFETIME CLEANED" STAT
             HStack {
                 VStack(alignment: .leading) {
                     Text("Cleaned to Date")
@@ -321,22 +317,18 @@ struct StorageGaugeView: View {
 struct PhotoDetailView: View {
     let asset: PHAsset
     let photoManager: PhotoManager
-    @ObservedObject var selectionManager: SelectionManager // Add this to connect the state
+    @ObservedObject var selectionManager: SelectionManager
     @State private var fullImage: UIImage? = nil
     
     var body: some View {
         VStack(spacing: 20) {
             if let img = fullImage {
-                Image(uiImage: img)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .padding()
+                Image(uiImage: img).resizable().aspectRatio(contentMode: .fit).padding()
             } else {
                 ProgressView()
             }
             
             VStack(spacing: 15) {
-                // Metadata
                 VStack(spacing: 4) {
                     Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown Date")
                         .font(.headline)
@@ -345,10 +337,23 @@ struct PhotoDetailView: View {
                         .foregroundColor(.secondary)
                 }
 
-                // NEW: Selection Toggle Button
+                Button(action: {
+                    photoManager.toggleProtection(id: asset.localIdentifier)
+                }) {
+                    Label(
+                        photoManager.protectedAssetIDs.contains(asset.localIdentifier) ? "Move to Review" : "Do Not Delete",
+                        systemImage: photoManager.protectedAssetIDs.contains(asset.localIdentifier) ? "arrow.uturn.backward" : "shield.fill"
+                    )
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(photoManager.protectedAssetIDs.contains(asset.localIdentifier) ? Color.orange : Color.green)
+                    .cornerRadius(10)
+                }
+
                 Button(action: {
                     selectionManager.toggleSelection(id: asset.localIdentifier)
-                    // Optional: Add haptics here
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 }) {
                     Label(
@@ -376,7 +381,6 @@ struct PhotoDetailView: View {
     }
 }
 
-
 struct ActionCard: View {
     let title: String
     let count: Int
@@ -386,22 +390,13 @@ struct ActionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundColor(color)
+                Image(systemName: icon).font(.title2).foregroundColor(color)
                 Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Image(systemName: "chevron.right").font(.caption).foregroundColor(.secondary)
             }
-            
             VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                Text(count > 0 ? "\(count) items found" : "Scan to start")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Text(title).font(.headline).foregroundColor(.primary)
+                Text(count > 0 ? "\(count) items found" : "Scan to start").font(.caption).foregroundColor(.secondary)
             }
         }
         .padding()
@@ -411,9 +406,18 @@ struct ActionCard: View {
     }
 }
 
-
-#Preview {
-    // Just a placeholder for the preview to work
-    PhotoDetailView(asset: PHAsset(), photoManager: PhotoManager(), selectionManager: SelectionManager())
+struct ProtectedPhotosView: View {
+    @ObservedObject var photoManager: PhotoManager
+    
+    var body: some View {
+        ResultsView(assets: photoManager.protectedAssets, photoManager: photoManager)
+            .navigationTitle("Protected Items")
+            .onAppear {
+                photoManager.fetchProtectedAssets()
+            }
+    }
 }
 
+#Preview {
+    PhotoDetailView(asset: PHAsset(), photoManager: PhotoManager(), selectionManager: SelectionManager())
+}
