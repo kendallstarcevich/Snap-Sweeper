@@ -223,31 +223,53 @@ struct ResultsView: View {
             
             if !selectionManager.selectedAssetIDs.isEmpty {
                 VStack(spacing: 12) {
-                    HStack {
-                        Image(systemName: "info.circle")
-                        Text("You will save \(Text(formattedSize).bold()) of space.")
-                    }
-                    .font(.footnote)
-                    .foregroundColor(.secondary)
-
-                    Button(action: {
-                        photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
-                            if success { selectionManager.deselectAll() }
+                    HStack(spacing: 15) {
+                        // THE NEW BULK PROTECT BUTTON
+                        Button(action: {
+                            // Protect all selected IDs
+                            for id in selectionManager.selectedAssetIDs {
+                                photoManager.toggleProtection(id: id)
+                            }
+                            selectionManager.deselectAll()
+                        }) {
+                            VStack {
+                                Image(systemName: "shield.fill")
+                                Text("Keep \(selectionManager.selectedAssetIDs.count)")
+                                    .font(.caption).bold()
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
                         }
-                    }) {
-                        Text("Delete \(selectionManager.selectedAssetIDs.count) Photos")
-                            .bold()
+
+                        // THE EXISTING DELETE BUTTON
+                        Button(action: {
+                            photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                                if success { selectionManager.deselectAll() }
+                            }
+                        }) {
+                            VStack {
+                                Image(systemName: "trash.fill")
+                                Text("Delete \(selectionManager.selectedAssetIDs.count)")
+                                    .font(.caption).bold()
+                            }
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color.red)
                             .foregroundColor(.white)
                             .cornerRadius(12)
+                        }
                     }
+                    
+                    Text("You have selected \(Text(formattedSize).bold()) of space.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
                 .padding()
                 .background(Color(UIColor.systemBackground))
                 .shadow(color: .black.opacity(0.1), radius: 10, y: -5)
-                .transition(.move(edge: .bottom))
             }
         }
         .navigationTitle("Clean Up")
@@ -332,6 +354,7 @@ struct PhotoDetailView: View {
     @Environment(\.dismiss) var dismiss
     @ObservedObject var selectionManager: SelectionManager
     @State private var fullImage: UIImage? = nil
+    var isFromVault: Bool = false
     
     var body: some View {
         VStack(spacing: 20) {
@@ -342,49 +365,44 @@ struct PhotoDetailView: View {
             }
             
             VStack(spacing: 15) {
-                VStack(spacing: 4) {
-                    Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown Date")
-                        .font(.headline)
-                    Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
+                            // HIDE the "Move to Review" button if we are in the Vault
+                            if !isFromVault {
+                                Button(action: {
+                                    photoManager.toggleProtection(id: asset.localIdentifier)
+                                    dismiss()
+                                }) {
+                                    Label("Do Not Delete", systemImage: "shield.fill")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                        .padding()
+                                        .frame(maxWidth: .infinity)
+                                        .background(Color.green)
+                                        .cornerRadius(10)
+                                }
+                            }
 
-                Button(action: {
-                    photoManager.toggleProtection(id: asset.localIdentifier)
-                    dismiss()
-                }) {
-                    Label(
-                        photoManager.protectedAssetIDs.contains(asset.localIdentifier) ? "Move to Review" : "Do Not Delete",
-                        systemImage: photoManager.protectedAssetIDs.contains(asset.localIdentifier) ? "arrow.uturn.backward" : "shield.fill"
-                    )
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(photoManager.protectedAssetIDs.contains(asset.localIdentifier) ? Color.orange : Color.green)
-                    .cornerRadius(10)
-                }
+                            // DELETE TOGGLE (Always visible)
+                            Button(action: {
+                                selectionManager.toggleSelection(id: asset.localIdentifier)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            }) {
+                                Label(
+                                    selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "Selected for Deletion" : "Mark for Deletion",
+                                    systemImage: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle"
+                                )
+                                .font(.headline)
+                                .foregroundColor(.white)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? Color.red : Color.gray)
+                                .cornerRadius(10)
+                            }
+                            .padding(.horizontal)
+                        }
+                        .padding(.bottom, 30)
+                    }
 
-                Button(action: {
-                    selectionManager.toggleSelection(id: asset.localIdentifier)
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                }) {
-                    Label(
-                        selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "Selected for Deletion" : "Mark for Deletion",
-                        systemImage: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle"
-                    )
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? Color.blue : Color.gray)
-                    .cornerRadius(10)
-                }
-                .padding(.horizontal)
-            }
-            .padding(.bottom, 30)
-        }
+                
         .onAppear {
             let options = PHImageRequestOptions()
             options.isNetworkAccessAllowed = true
@@ -424,11 +442,62 @@ struct ProtectedPhotosView: View {
     @ObservedObject var photoManager: PhotoManager
     
     var body: some View {
-        ResultsView(assets: photoManager.protectedAssets, photoManager: photoManager)
+        // We use a modified version of ResultsView or a custom view
+        VaultResultsView(assets: photoManager.protectedAssets, photoManager: photoManager)
             .navigationTitle("Protected Items")
             .onAppear {
                 photoManager.fetchProtectedAssets()
             }
+    }
+}
+
+// A specific version of ResultsView that only has the Delete action
+struct VaultResultsView: View {
+    let assets: [PHAsset]
+    @ObservedObject var photoManager: PhotoManager
+    @StateObject var selectionManager = SelectionManager()
+    
+    let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // ... Header (same as ResultsView) ...
+
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 4) {
+                    ForEach(assets, id: \.localIdentifier) { asset in
+                        ZStack(alignment: .topTrailing) {
+                            NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: true)) {
+                                PhotoThumbnail(asset: asset)
+                                    .frame(height: 120).clipped().cornerRadius(4)
+                            }
+                            // ... Checkmark Overlay (same as ResultsView) ...
+                        }
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+            
+            // --- VAULT SUMMARY BAR (ONLY DELETE, NO KEEP) ---
+            if !selectionManager.selectedAssetIDs.isEmpty {
+                Button(action: {
+                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                        if success { selectionManager.deselectAll() }
+                    }
+                }) {
+                    Text("Permanently Delete \(selectionManager.selectedAssetIDs.count) Photos")
+                        .bold()
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                }
+                .padding()
+                .background(Color(UIColor.systemBackground))
+                .shadow(color: .black.opacity(0.1), radius: 10, y: -5)
+            }
+        }
     }
 }
 
