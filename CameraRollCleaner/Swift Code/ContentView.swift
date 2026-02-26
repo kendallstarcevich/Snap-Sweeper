@@ -44,6 +44,26 @@ struct ContentView: View {
                         deletedBytes: photoManager.totalBytesDeleted
                     )
                     .padding(.top)
+                    
+                    NavigationLink(destination: ProtectedPhotosView(photoManager: photoManager)) {
+                            HStack {
+                                Image(systemName: "shield.checkered")
+                                    .foregroundColor(.green)
+                                Text("Protected Vault")
+                                    .fontWeight(.semibold)
+                                Spacer()
+                                Text("\(photoManager.protectedAssetIDs.count) items")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            .padding()
+                            .background(Color.green.opacity(0.1))
+                            .cornerRadius(12)
+                        }
+                        .padding(.horizontal)
 
                     VStack(alignment: .leading, spacing: 15) {
                         Text("Smart Clean Actions")
@@ -59,15 +79,7 @@ struct ContentView: View {
                                     color: .blue
                                 )
                             }
-                            
-                            NavigationLink(destination: ProtectedPhotosView(photoManager: photoManager)) {
-                                ActionCard(
-                                    title: "Do Not Delete",
-                                    count: photoManager.protectedAssetIDs.count,
-                                    icon: "shield.checkered",
-                                    color: .green
-                                )
-                            }
+                
                             
                             NavigationLink(destination: Text("Blurry Scan Coming Soon")) {
                                 ActionCard(
