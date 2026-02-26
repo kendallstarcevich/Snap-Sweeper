@@ -329,6 +329,7 @@ struct StorageGaugeView: View {
 struct PhotoDetailView: View {
     let asset: PHAsset
     let photoManager: PhotoManager
+    @Environment(\.dismiss) var dismiss
     @ObservedObject var selectionManager: SelectionManager
     @State private var fullImage: UIImage? = nil
     
@@ -351,6 +352,7 @@ struct PhotoDetailView: View {
 
                 Button(action: {
                     photoManager.toggleProtection(id: asset.localIdentifier)
+                    dismiss()
                 }) {
                     Label(
                         photoManager.protectedAssetIDs.contains(asset.localIdentifier) ? "Move to Review" : "Do Not Delete",
