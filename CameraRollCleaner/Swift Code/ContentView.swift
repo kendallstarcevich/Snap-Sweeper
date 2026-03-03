@@ -109,10 +109,25 @@ struct VideoResultsView: View {
         let bytes = selectionManager.calculateTotalSize(assets: photoManager.videoAssets)
         return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
-
+    // Add this helper function inside the VideoResultsView struct:
+    func updateThreshold(to seconds: Double) {
+        photoManager.videoThreshold = seconds
+        photoManager.fetchVideos() // Re-run the scan with the new limit
+    }
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
+            HStack {// Inside VideoResultsView's Header HStack:
+                
+                Menu {
+                    Section("Minimum Duration") {
+                        Button("Over 30 Seconds") { updateThreshold(to: 30) }
+                        Button("Over 2 Minutes") { updateThreshold(to: 120) }
+                        Button("Over 5 Minutes") { updateThreshold(to: 300) }
+                        Button("Over 10 Minutes") { updateThreshold(to: 600) }
+                    }
+                } label: {
+                    Label("Threshold", systemImage: "timer")
+                }
                 Menu {
                     ForEach(PhotoManager.SortStrategy.allCases, id: \.self) { strategy in
                         Button(strategy.rawValue) { photoManager.sortVideos(by: strategy) }

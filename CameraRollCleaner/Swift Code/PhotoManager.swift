@@ -82,10 +82,18 @@ class PhotoManager: ObservableObject {
         }
     }
     
+    // Inside PhotoManager class:
+
+    // Stores the threshold in seconds (default to 120s / 2 minutes)
+    @AppStorage("videoThreshold") var videoThreshold: Double = 120
+
     func fetchVideos() {
         let videoOptions = PHFetchOptions()
-        // Predicate: Find videos longer than 300 seconds (5 minutes)
-        videoOptions.predicate = NSPredicate(format: "mediaType = %d AND duration > 300", PHAssetMediaType.video.rawValue)
+        
+        // Use the dynamic threshold from the user's settings
+        videoOptions.predicate = NSPredicate(format: "mediaType = %d AND duration > %f",
+                                             PHAssetMediaType.video.rawValue,
+                                             videoThreshold)
         
         let results = PHAsset.fetchAssets(with: .video, options: videoOptions)
         
@@ -97,9 +105,6 @@ class PhotoManager: ObservableObject {
         }
         self.videoAssets = tempVideos
         self.videoCount = tempVideos.count
-        
-        // Default to sorting by size since this is a "Long Video" cleaner
-        self.sortVideos(by: .largest)
     }
 
     func sortVideos(by strategy: SortStrategy) {
@@ -112,7 +117,7 @@ class PhotoManager: ObservableObject {
             videoAssets.sort { ($0.creationDate ?? Date()) > ($1.creationDate ?? Date()) }
         }
     }
-
+    
     func fetchMetadata() {
         let allPhotos = PHAsset.fetchAssets(with: .image, options: nil)
         self.photoCount = allPhotos.count
