@@ -38,7 +38,6 @@ struct ContentView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 25) {
-                    // 1. Storage Gauge
                     StorageGaugeView(
                         usedBytes: storageInfo.usedBytes,
                         totalBytes: storageInfo.totalBytes,
@@ -46,7 +45,6 @@ struct ContentView: View {
                     )
                     .padding(.top)
                     
-                    // 2. Protected Vault Access
                     NavigationLink(destination: ProtectedPhotosView(photoManager: photoManager)) {
                         HStack {
                             Image(systemName: "shield.checkered").foregroundColor(.green)
@@ -62,7 +60,6 @@ struct ContentView: View {
                     }
                     .padding(.horizontal)
 
-                    // 3. Smart Actions Grid
                     VStack(alignment: .leading, spacing: 15) {
                         Text("Smart Clean Actions").font(.title2).bold()
                         
@@ -99,7 +96,7 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Video Views
+// MARK: - Video Results View
 struct VideoResultsView: View {
     @ObservedObject var photoManager: PhotoManager
     @StateObject var selectionManager = SelectionManager()
@@ -109,15 +106,15 @@ struct VideoResultsView: View {
         let bytes = selectionManager.calculateTotalSize(assets: photoManager.videoAssets)
         return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
     }
-    // Add this helper function inside the VideoResultsView struct:
+
     func updateThreshold(to seconds: Double) {
         photoManager.videoThreshold = seconds
-        photoManager.fetchVideos() // Re-run the scan with the new limit
+        photoManager.fetchVideos()
     }
+
     var body: some View {
         VStack(spacing: 0) {
-            HStack {// Inside VideoResultsView's Header HStack:
-                
+            HStack {
                 Menu {
                     Section("Minimum Duration") {
                         Button("Over 30 Seconds") { updateThreshold(to: 30) }
@@ -125,16 +122,14 @@ struct VideoResultsView: View {
                         Button("Over 5 Minutes") { updateThreshold(to: 300) }
                         Button("Over 10 Minutes") { updateThreshold(to: 600) }
                     }
-                } label: {
-                    Label("Threshold", systemImage: "timer")
-                }
+                } label: { Label("Threshold", systemImage: "timer") }
+
                 Menu {
                     ForEach(PhotoManager.SortStrategy.allCases, id: \.self) { strategy in
                         Button(strategy.rawValue) { photoManager.sortVideos(by: strategy) }
                     }
                 } label: { Label("Sort", systemImage: "line.3.horizontal.decrease.circle") }
                 
-                Text("\(selectionManager.selectedAssetIDs.count) selected").font(.subheadline)
                 Spacer()
                 Button(selectionManager.selectedAssetIDs.count == photoManager.videoAssets.count ? "Deselect All" : "Select All") {
                     if selectionManager.selectedAssetIDs.count == photoManager.videoAssets.count { selectionManager.deselectAll() }
@@ -146,33 +141,31 @@ struct VideoResultsView: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(photoManager.videoAssets, id: \.localIdentifier) { asset in
-                        ZStack(alignment: .topTrailing) {
-                            NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
-                                VideoThumbnail(asset: asset).frame(height: 120).clipped().cornerRadius(4)
-                            }
-                            .buttonStyle(.plain)
-                            
-                            Image(systemName: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? .blue : .white)
-                                .shadow(radius: 2).padding(8)
-                                .onTapGesture { selectionManager.toggleSelection(id: asset.localIdentifier) }
+                        NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: true)) {
+                            PhotoThumbnail(asset: asset)
+                                .frame(minWidth: 0, maxWidth: .infinity)
+                                .aspectRatio(1, contentMode: .fill)
+                                .clipped()
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        // ADD THIS OVERLAY
+                        .overlay(alignment: .bottomTrailing) {
+                            VideoBadge(asset: asset)
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
                         }
                     }
                 }
                 .padding(.horizontal, 2)
+                .padding(.top, 4)
             }
             
             if !selectionManager.selectedAssetIDs.isEmpty {
-                VStack(spacing: 12) {
-                    Button(action: {
-                        photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in selectionManager.deselectAll() }
-                    }) {
-                        Text("Delete \(selectionManager.selectedAssetIDs.count) Videos")
-                            .bold().frame(maxWidth: .infinity).padding().background(Color.red).foregroundColor(.white).cornerRadius(12)
-                    }
-                    Text("You will save \(Text(formattedSize).bold()) of space.").font(.caption2).foregroundColor(.secondary)
+                SummaryBar(label: "Delete \(selectionManager.selectedAssetIDs.count) Videos", size: formattedSize) {
+                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in selectionManager.deselectAll() }
                 }
-                .padding().background(Color(UIColor.systemBackground)).shadow(color: .black.opacity(0.1), radius: 10, y: -5)
             }
         }
         .navigationTitle("Large Videos")
@@ -180,7 +173,31 @@ struct VideoResultsView: View {
     }
 }
 
-// MARK: - Photo/Common Views
+struct VideoBadge: View {
+    let asset: PHAsset
+    
+    var durationString: String {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.minute, .second]
+        formatter.unitsStyle = .positional
+        formatter.zeroFormattingBehavior = .pad
+        return formatter.string(from: asset.duration) ?? "0:00"
+    }
+
+    var body: some View {
+        if asset.mediaType == .video {
+            Text(durationString)
+                .font(.caption2).bold()
+                .foregroundColor(.white)
+                .padding(4)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(4)
+                .padding(4)
+        }
+    }
+}
+
+// MARK: - Screenshot Results View
 struct ResultsView: View {
     let assets: [PHAsset]
     @ObservedObject var photoManager: PhotoManager
@@ -212,19 +229,21 @@ struct ResultsView: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(assets, id: \.localIdentifier) { asset in
-                        ZStack(alignment: .topTrailing) {
-                            NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
-                                PhotoThumbnail(asset: asset).frame(height: 120).clipped().cornerRadius(4)
-                            }
-                            .buttonStyle(.plain)
-                            Image(systemName: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? .blue : .white)
-                                .shadow(radius: 2).padding(8)
-                                .onTapGesture { selectionManager.toggleSelection(id: asset.localIdentifier) }
+                        NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
+                            PhotoThumbnail(asset: asset)
+                                .frame(minWidth: 0, maxWidth: .infinity)
+                                .aspectRatio(1, contentMode: .fill)
+                                .clipped()
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .overlay(alignment: .topTrailing) {
+                            SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
                         }
                     }
                 }
                 .padding(.horizontal, 2)
+                .padding(.top, 4)
             }
             
             if !selectionManager.selectedAssetIDs.isEmpty {
@@ -259,86 +278,94 @@ struct ResultsView: View {
     }
 }
 
-// MARK: - Core Components
-struct PhotoDetailView: View {
-    let asset: PHAsset
-    let photoManager: PhotoManager
-    @Environment(\.dismiss) var dismiss
-    @ObservedObject var selectionManager: SelectionManager
-    @State private var fullImage: UIImage? = nil
-    var isFromVault: Bool = false
+struct VaultResultsView: View {
+    let assets: [PHAsset]
+    @ObservedObject var photoManager: PhotoManager
+    @StateObject var selectionManager = SelectionManager()
+    let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
     
-    @State private var player: AVPlayer? = nil
-    @State private var showVideoPlayer = false
+    var formattedSize: String {
+        let bytes = selectionManager.calculateTotalSize(assets: assets)
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
     
     var body: some View {
-        VStack(spacing: 20) {
-            ZStack {
-                if let img = fullImage { Image(uiImage: img).resizable().aspectRatio(contentMode: .fit).padding() }
-                else { ProgressView() }
-                
-                if asset.mediaType == .video {
-                    Button(action: prepareAndPlayVideo) {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 70)).foregroundColor(.white.opacity(0.8)).shadow(radius: 10)
+        VStack(spacing: 0) {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 4) {
+                    ForEach(assets, id: \.localIdentifier) { asset in
+                        // Standardized Square Container
+                        NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: true)) {
+                            PhotoThumbnail(asset: asset)
+                                .frame(minWidth: 0, maxWidth: .infinity)
+                                .aspectRatio(1, contentMode: .fill) // This forces the square
+                                .clipped() // This cuts off any video/photo edges that stick out
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        // Video Badge Overlay (Bottom Right)
+                        .overlay(alignment: .bottomTrailing) {
+                            VideoBadge(asset: asset)
+                        }
+                        // Selection Toggle Overlay (Top Right)
+                        .overlay(alignment: .topTrailing) {
+                            SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
+                        }
                     }
                 }
-            }
-            .sheet(isPresented: $showVideoPlayer) {
-                if let player = player { VideoPlayer(player: player).onAppear { player.play() } }
+                .padding(.horizontal, 2)
+                .padding(.top, 4)
             }
             
-            VStack(spacing: 15) {
-                VStack(spacing: 4) {
-                    Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown Date").font(.headline)
-                    Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file)).font(.subheadline).foregroundColor(.secondary)
-                }
-                
-                if !isFromVault {
-                    Button(action: { photoManager.toggleProtection(id: asset.localIdentifier); dismiss() }) {
-                        Label("Do Not Delete", systemImage: "shield.fill")
-                            .font(.headline).foregroundColor(.white).padding().frame(maxWidth: .infinity).background(Color.green).cornerRadius(10)
+            if !selectionManager.selectedAssetIDs.isEmpty {
+                SummaryBar(label: "Permanently Delete \(selectionManager.selectedAssetIDs.count) Items", size: formattedSize) {
+                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
+                        selectionManager.deselectAll()
                     }
                 }
-                Button(action: {
-                    selectionManager.toggleSelection(id: asset.localIdentifier)
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                }) {
-                    Label(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "Selected for Deletion" : "Mark for Deletion", systemImage: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle")
-                    .font(.headline).foregroundColor(.white).padding().frame(maxWidth: .infinity)
-                    .background(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? Color.red : Color.gray).cornerRadius(10)
-                }
-                .padding(.horizontal)
-            }
-            .padding(.bottom, 30)
-        }
-        .onAppear { loadFullImage() }
-    }
-    
-    func loadFullImage() {
-        PHImageManager.default().requestImage(for: asset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: nil) { img, _ in self.fullImage = img }
-    }
-
-    func prepareAndPlayVideo() {
-        PHImageManager.default().requestAVAsset(forVideo: asset, options: nil) { avAsset, _, _ in
-            if let urlAsset = avAsset as? AVURLAsset {
-                DispatchQueue.main.async { self.player = AVPlayer(url: urlAsset.url); self.showVideoPlayer = true }
             }
         }
     }
 }
 
+// MARK: - Standardized Reusable Components
+
+struct SelectionToggle: View {
+    let id: String
+    @ObservedObject var selectionManager: SelectionManager
+    var body: some View {
+        Image(systemName: selectionManager.selectedAssetIDs.contains(id) ? "checkmark.circle.fill" : "circle")
+            .font(.system(size: 22))
+            .foregroundStyle(selectionManager.selectedAssetIDs.contains(id) ? .blue : .white)
+            .shadow(radius: 3)
+            .padding(8)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                selectionManager.toggleSelection(id: id)
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
+    }
+}
+
+struct SummaryBar: View {
+    let label: String; let size: String; let action: () -> Void
+    var body: some View {
+        VStack(spacing: 12) {
+            Button(action: action) {
+                Text(label).bold().frame(maxWidth: .infinity).padding().background(Color.red).foregroundColor(.white).cornerRadius(12)
+            }
+            Text("You will save \(Text(size).bold()) of space.").font(.caption2).foregroundColor(.secondary)
+        }
+        .padding().background(Color(UIColor.systemBackground)).shadow(color: .black.opacity(0.1), radius: 10, y: -5)
+    }
+}
+
 struct VideoThumbnail: View {
     let asset: PHAsset
-    var durationString: String {
-        let formatter = DateComponentsFormatter()
-        formatter.allowedUnits = [.minute, .second]; formatter.unitsStyle = .positional; formatter.zeroFormattingBehavior = .pad
-        return formatter.string(from: asset.duration) ?? "0:00"
-    }
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             PhotoThumbnail(asset: asset)
-            Text(durationString).font(.caption2).bold().foregroundColor(.white).padding(4).background(Color.black.opacity(0.6)).cornerRadius(4).padding(4)
+            VideoBadge(asset: asset) // Reusing the same component!
         }
     }
 }
@@ -352,7 +379,7 @@ struct PhotoThumbnail: View {
             else { Color.gray.opacity(0.2) }
         }
         .onAppear {
-            PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 250, height: 250), contentMode: .aspectFill, options: nil) { img, _ in self.image = img }
+            PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 300, height: 300), contentMode: .aspectFill, options: nil) { img, _ in self.image = img }
         }
     }
 }
@@ -396,37 +423,59 @@ struct ProtectedPhotosView: View {
     }
 }
 
-struct VaultResultsView: View {
-    let assets: [PHAsset]; @ObservedObject var photoManager: PhotoManager; @StateObject var selectionManager = SelectionManager()
-    let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
-    var formattedSize: String {
-        let bytes = selectionManager.calculateTotalSize(assets: assets)
-        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
-    }
+struct PhotoDetailView: View {
+    let asset: PHAsset
+    let photoManager: PhotoManager
+    @Environment(\.dismiss) var dismiss
+    @ObservedObject var selectionManager: SelectionManager
+    @State private var fullImage: UIImage? = nil
+    var isFromVault: Bool = false
+    @State private var player: AVPlayer? = nil
+    @State private var showVideoPlayer = false
+    
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 4) {
-                    ForEach(assets, id: \.localIdentifier) { asset in
-                        ZStack(alignment: .topTrailing) {
-                            NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: true)) {
-                                PhotoThumbnail(asset: asset).frame(height: 120).clipped().cornerRadius(4)
-                            }
-                            Image(systemName: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(.blue).padding(8).onTapGesture { selectionManager.toggleSelection(id: asset.localIdentifier) }
-                        }
+        VStack(spacing: 20) {
+            ZStack {
+                if let img = fullImage { Image(uiImage: img).resizable().aspectRatio(contentMode: .fit).padding() }
+                else { ProgressView() }
+                if asset.mediaType == .video {
+                    Button(action: prepareAndPlayVideo) {
+                        Image(systemName: "play.circle.fill").font(.system(size: 70)).foregroundColor(.white.opacity(0.8)).shadow(radius: 10)
                     }
                 }
             }
-            if !selectionManager.selectedAssetIDs.isEmpty {
-                VStack(spacing: 12) {
-                    Button(action: { photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in selectionManager.deselectAll() } }) {
-                        Text("Permanently Delete \(selectionManager.selectedAssetIDs.count) Items").bold().frame(maxWidth: .infinity).padding().background(Color.red).foregroundColor(.white).cornerRadius(12)
-                    }
-                    Text("You will save \(Text(formattedSize).bold()) of space.").font(.caption2).foregroundColor(.secondary)
-                }
-                .padding().background(Color(UIColor.systemBackground)).shadow(color: .black.opacity(0.1), radius: 10, y: -5)
+            .sheet(isPresented: $showVideoPlayer) {
+                if let player = player { VideoPlayer(player: player).onAppear { player.play() } }
             }
+            
+            VStack(spacing: 15) {
+                VStack(spacing: 4) {
+                    Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown Date").font(.headline)
+                    Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file)).font(.subheadline).foregroundColor(.secondary)
+                }
+                if !isFromVault {
+                    Button(action: { photoManager.toggleProtection(id: asset.localIdentifier); dismiss() }) {
+                        Label("Do Not Delete", systemImage: "shield.fill").font(.headline).foregroundColor(.white).padding().frame(maxWidth: .infinity).background(Color.green).cornerRadius(10)
+                    }
+                }
+                Button(action: {
+                    selectionManager.toggleSelection(id: asset.localIdentifier)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }) {
+                    Label(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "Selected for Deletion" : "Mark for Deletion", systemImage: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle")
+                    .font(.headline).foregroundColor(.white).padding().frame(maxWidth: .infinity)
+                    .background(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? Color.red : Color.gray).cornerRadius(10)
+                }
+                .padding(.horizontal)
+            }
+            .padding(.bottom, 30)
+        }
+        .onAppear { loadFullImage() }
+    }
+    func loadFullImage() { PHImageManager.default().requestImage(for: asset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: nil) { img, _ in self.fullImage = img } }
+    func prepareAndPlayVideo() {
+        PHImageManager.default().requestAVAsset(forVideo: asset, options: nil) { avAsset, _, _ in
+            if let urlAsset = avAsset as? AVURLAsset { DispatchQueue.main.async { self.player = AVPlayer(url: urlAsset.url); self.showVideoPlayer = true } }
         }
     }
 }
