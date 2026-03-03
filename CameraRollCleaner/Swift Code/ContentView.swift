@@ -291,23 +291,46 @@ struct VaultResultsView: View {
     
     var body: some View {
         VStack(spacing: 0) {
+            // --- ADDED HEADER SECTION ---
+            HStack {
+                Menu {
+                    ForEach(PhotoManager.SortStrategy.allCases, id: \.self) { strategy in
+                        Button(strategy.rawValue) {
+                            photoManager.sortVault(by: strategy)
+                        }
+                    }
+                } label: {
+                    Label("Sort", systemImage: "line.3.horizontal.decrease.circle")
+                }
+                
+                Spacer()
+                
+                Button(selectionManager.selectedAssetIDs.count == assets.count && !assets.isEmpty ? "Deselect All" : "Select All") {
+                    if selectionManager.selectedAssetIDs.count == assets.count {
+                        selectionManager.deselectAll()
+                    } else {
+                        selectionManager.selectAll(assets: assets)
+                    }
+                }
+            }
+            .padding()
+            .background(Color(UIColor.secondarySystemBackground))
+            // --- END HEADER SECTION ---
+
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(assets, id: \.localIdentifier) { asset in
-                        // Standardized Square Container
                         NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: true)) {
                             PhotoThumbnail(asset: asset)
                                 .frame(minWidth: 0, maxWidth: .infinity)
-                                .aspectRatio(1, contentMode: .fill) // This forces the square
-                                .clipped() // This cuts off any video/photo edges that stick out
+                                .aspectRatio(1, contentMode: .fill)
+                                .clipped()
                                 .cornerRadius(4)
                         }
                         .buttonStyle(.plain)
-                        // Video Badge Overlay (Bottom Right)
                         .overlay(alignment: .bottomTrailing) {
                             VideoBadge(asset: asset)
                         }
-                        // Selection Toggle Overlay (Top Right)
                         .overlay(alignment: .topTrailing) {
                             SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
                         }

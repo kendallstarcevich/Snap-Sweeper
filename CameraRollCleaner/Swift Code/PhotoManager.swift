@@ -24,6 +24,17 @@ class PhotoManager: ObservableObject {
         case largest = "Largest Size"
     }
 
+    func sortVault(by strategy: SortStrategy) {
+        switch strategy {
+        case .oldest:
+            protectedAssets.sort { ($0.creationDate ?? Date()) < ($1.creationDate ?? Date()) }
+        case .largest:
+            protectedAssets.sort { getSize(for: $0) > getSize(for: $1) }
+        case .newest:
+            protectedAssets.sort { ($0.creationDate ?? Date()) > ($1.creationDate ?? Date()) }
+        }
+    }
+    
     func toggleProtection(id: String) {
         if protectedAssetIDs.contains(id) {
             protectedAssetIDs.remove(id)
