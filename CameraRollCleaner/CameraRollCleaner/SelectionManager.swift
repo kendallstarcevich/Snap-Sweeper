@@ -25,6 +25,11 @@ class SelectionManager: ObservableObject {
             selectedAssetIDs.insert(id)
         }
     }
+
+    func selectMany(_ ids: Set<String>) {
+        selectedAssetIDs.formUnion(ids)
+    }
+
 }
 
 
