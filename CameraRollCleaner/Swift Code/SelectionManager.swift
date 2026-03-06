@@ -21,6 +21,10 @@ class SelectionManager: ObservableObject {
         }
     }
 
+    func selectMany(_ ids: Set<String>) {
+        selectedAssetIDs.formUnion(ids)
+    }
+
     func calculateTotalSize(assets: [PHAsset]) -> Int64 {
         let selectedAssets = assets.filter { selectedAssetIDs.contains($0.localIdentifier) }
         var totalBytes: Int64 = 0
