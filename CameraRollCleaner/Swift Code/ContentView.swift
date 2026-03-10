@@ -141,8 +141,9 @@ struct VideoResultsView: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 4) {
                     ForEach(photoManager.videoAssets, id: \.localIdentifier) { asset in
-                        NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: true)) {
-                            PhotoThumbnail(asset: asset)
+                        // Inside the ForEach in VideoResultsView:
+                        NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: false)) {
+                            VideoThumbnail(asset: asset)
                                 .frame(minWidth: 0, maxWidth: .infinity)
                                 .aspectRatio(1, contentMode: .fill)
                                 .clipped()
@@ -162,12 +163,58 @@ struct VideoResultsView: View {
                 .padding(.top, 4)
             }
             
+            // Replace the SummaryBar block with this:
             if !selectionManager.selectedAssetIDs.isEmpty {
-                SummaryBar(label: "Delete \(selectionManager.selectedAssetIDs.count) Videos", size: formattedSize) {
-                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in selectionManager.deselectAll() }
+                VStack(spacing: 12) {
+                    HStack(spacing: 15) {
+                        // 1. THE KEEP (VAULT) BUTTON
+                        Button(action: {
+                            for id in selectionManager.selectedAssetIDs {
+                                photoManager.toggleProtection(id: id)
+                            }
+                            selectionManager.deselectAll()
+                            // Refresh video list after moving to vault
+                            photoManager.fetchVideos()
+                        }) {
+                            VStack {
+                                Image(systemName: "shield.fill")
+                                Text("Keep \(selectionManager.selectedAssetIDs.count)")
+                                    .font(.caption).bold()
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+
+                        // 2. THE DELETE BUTTON
+                        Button(action: {
+                            photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
+                                selectionManager.deselectAll()
+                            }
+                        }) {
+                            VStack {
+                                Image(systemName: "trash.fill")
+                                Text("Delete \(selectionManager.selectedAssetIDs.count)")
+                                    .font(.caption).bold()
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(Color.red)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                    }
+                    
+                    Text("You will save \(Text(formattedSize).bold()) of space.")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
                 }
-            }
-        }
+                .padding()
+                .background(Color(UIColor.systemBackground))
+                .shadow(color: .black.opacity(0.1), radius: 10, y: -5)
+            }        }
         .navigationTitle("Large Videos")
         .onAppear { photoManager.fetchVideos() }
     }
@@ -249,23 +296,43 @@ struct ResultsView: View {
             if !selectionManager.selectedAssetIDs.isEmpty {
                 VStack(spacing: 12) {
                     HStack(spacing: 15) {
+                        // NEW: BULK VAULT BUTTON FOR VIDEOS
                         Button(action: {
-                            for id in selectionManager.selectedAssetIDs { photoManager.toggleProtection(id: id) }
+                            for id in selectionManager.selectedAssetIDs {
+                                photoManager.toggleProtection(id: id)
+                            }
                             selectionManager.deselectAll()
                         }) {
-                            VStack { Image(systemName: "shield.fill"); Text("Keep \(selectionManager.selectedAssetIDs.count)").font(.caption).bold() }
-                            .frame(maxWidth: .infinity).padding().background(Color.green).foregroundColor(.white).cornerRadius(12)
+                            VStack {
+                                Image(systemName: "shield.fill")
+                                Text("Keep \(selectionManager.selectedAssetIDs.count)")
+                                    .font(.caption).bold()
+                            }
+                            .frame(maxWidth: .infinity).padding()
+                            .background(Color.green).foregroundColor(.white).cornerRadius(12)
                         }
+
+                        // EXISTING DELETE BUTTON
                         Button(action: {
-                            photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in selectionManager.deselectAll() }
+                            photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
+                                selectionManager.deselectAll()
+                            }
                         }) {
-                            VStack { Image(systemName: "trash.fill"); Text("Delete \(selectionManager.selectedAssetIDs.count)").font(.caption).bold() }
-                            .frame(maxWidth: .infinity).padding().background(Color.red).foregroundColor(.white).cornerRadius(12)
+                            VStack {
+                                Image(systemName: "trash.fill")
+                                Text("Delete \(selectionManager.selectedAssetIDs.count)")
+                                    .font(.caption).bold()
+                            }
+                            .frame(maxWidth: .infinity).padding()
+                            .background(Color.red).foregroundColor(.white).cornerRadius(12)
                         }
                     }
-                    Text("You will save \(Text(formattedSize).bold()) of space.").font(.caption2).foregroundColor(.secondary)
+                    Text("You will save \(Text(formattedSize).bold()) of space.")
+                        .font(.caption2).foregroundColor(.secondary)
                 }
-                .padding().background(Color(UIColor.systemBackground)).shadow(color: .black.opacity(0.1), radius: 10, y: -5)
+                .padding()
+                .background(Color(UIColor.systemBackground))
+                .shadow(color: .black.opacity(0.1), radius: 10, y: -5)
             }
         }
         .navigationTitle("Review")
