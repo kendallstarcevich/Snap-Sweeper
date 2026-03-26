@@ -129,6 +129,39 @@ class PhotoManager: ObservableObject {
         }
     }
     
+    @Published var duplicateGroups: [[PHAsset]] = []
+
+    func scanForDuplicates() {
+        let allAssets = screenshotAssets // Or allPhotos
+        var groups: [[PHAsset]] = []
+        let timeThreshold: TimeInterval = 60 // 1 minute
+        
+        // Sort by date so we only compare neighbors
+        let sorted = allAssets.sorted { ($0.creationDate ?? Date()) < ($1.creationDate ?? Date()) }
+        
+        for i in 0..<sorted.count {
+            var currentGroup: [PHAsset] = [sorted[i]]
+            
+            for j in i+1..<sorted.count {
+                let timeGap = sorted[j].creationDate!.timeIntervalSince(sorted[i].creationDate!)
+                if timeGap > timeThreshold { break } // Too far apart in time
+                
+                // Perform the heavy Vision check
+                computeSimilarity(asset1: sorted[i], asset2: sorted[j]) { distance in
+                    if distance < 15.0 { // 15 is a safe "similar" threshold
+                        currentGroup.append(sorted[j])
+                    }
+                }
+            }
+            
+            if currentGroup.count > 1 {
+                groups.append(currentGroup)
+            }
+        }
+        DispatchQueue.main.async {
+            self.duplicateGroups = groups
+        }
+    }
     func fetchMetadata() {
         let allPhotos = PHAsset.fetchAssets(with: .image, options: nil)
         self.photoCount = allPhotos.count
