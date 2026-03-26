@@ -70,8 +70,13 @@ struct ContentView: View {
                             NavigationLink(destination: Text("Blurry Scan Coming Soon")) {
                                 ActionCard(title: "Blurry Photos", count: 0, icon: "eye.slash.fill", color: .orange)
                             }
-                            NavigationLink(destination: Text("Duplicate Scan Coming Soon")) {
-                                ActionCard(title: "Duplicates", count: 0, icon: "square.on.square.fill", color: .purple)
+                            NavigationLink(destination: DuplicatesView(photoManager: photoManager)) {
+                                ActionCard(
+                                    title: "Duplicates",
+                                    count: photoManager.duplicateGroups.count,
+                                    icon: "square.on.square.fill",
+                                    color: .purple
+                                )
                             }
                             NavigationLink(destination: VideoResultsView(photoManager: photoManager)) {
                                 ActionCard(title: "Large Videos", count: photoManager.videoCount, icon: "video.fill", color: .green)
@@ -87,7 +92,9 @@ struct ContentView: View {
                     Button(action: {
                         photoManager.requestAccessAndFetch()
                         storageInfo = StorageManager.getStorageInfo()
+                        photoManager.scanForDuplicates()
                     }) {
+                        
                         Image(systemName: "arrow.clockwise")
                     }
                 }
@@ -369,6 +376,125 @@ struct VaultResultsView: View {
                 SummaryBar(label: "Permanently Delete \(selectionManager.selectedAssetIDs.count) Items", size: formattedSize) {
                     photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in selectionManager.deselectAll() }
                 }
+            }
+        }
+    }
+}
+struct DuplicatesView: View {
+    @ObservedObject var photoManager: PhotoManager
+    
+    var body: some View {
+        List {
+            ForEach(0..<photoManager.duplicateGroups.count, id: \.self) { index in
+                let group = photoManager.duplicateGroups[index]
+                
+                NavigationLink(destination: DuplicateGroupDetailView(group: group, photoManager: photoManager)) {
+                    HStack(spacing: 15) {
+                        // Preview of the first photo in the group
+                        PhotoThumbnail(asset: group.first!)
+                            .frame(width: 60, height: 60)
+                            .cornerRadius(8)
+                        
+                        VStack(alignment: .leading) {
+                            Text("Group \(index + 1)")
+                                .font(.headline)
+                            Text("\(group.count) similar photos")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Text(ByteCountFormatter.string(fromByteCount: calculateGroupSize(group), countStyle: .file))
+                            .font(.caption)
+                            .padding(6)
+                            .background(Color.secondary.opacity(0.1))
+                            .cornerRadius(6)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .navigationTitle("Similar Photos")
+    }
+    
+    func calculateGroupSize(_ group: [PHAsset]) -> Int64 {
+        group.reduce(0) { $0 + photoManager.getSize(for: $1) }
+    }
+}
+
+struct DuplicateGroupDetailView: View {
+    let group: [PHAsset]
+    @ObservedObject var photoManager: PhotoManager
+    @StateObject var selectionManager = SelectionManager()
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        VStack {
+            // Horizontal Scroll for Comparison
+            TabView {
+                ForEach(group, id: \.localIdentifier) { asset in
+                    VStack {
+                        PhotoThumbnail(asset: asset)
+                            .frame(maxWidth: .infinity)
+                            .aspectRatio(1, contentMode: .fit)
+                            .cornerRadius(12)
+                            .padding()
+                        
+                        VStack(spacing: 10) {
+                            Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "")
+                                .font(.caption)
+                            
+                            Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
+                                .bold()
+                        }
+                        
+                        Button(action: {
+                            selectionManager.toggleSelection(id: asset.localIdentifier)
+                        }) {
+                            Label(
+                                selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "Marked for Deletion" : "Mark this one",
+                                systemImage: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "trash.fill" : "circle"
+                            )
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? Color.red : Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                        }
+                        .padding(.horizontal, 40)
+                    }
+                }
+            }
+            .tabViewStyle(.page)
+            .indexViewStyle(.page(backgroundDisplayMode: .always))
+            
+            // Bottom Action Bar
+            if !selectionManager.selectedAssetIDs.isEmpty {
+                Button(action: {
+                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                        if success {
+                            photoManager.scanForDuplicates() // Re-scan to update groups
+                            dismiss()
+                        }
+                    }
+                }) {
+                    Text("Delete Selected Duplicates")
+                        .bold()
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                }
+                .padding()
+            }
+        }
+        .navigationTitle("Compare & Clean")
+        .onAppear {
+            // Auto-select everything except the first one as a suggestion
+            for i in 1..<group.count {
+                selectionManager.selectedAssetIDs.insert(group[i].localIdentifier)
             }
         }
     }

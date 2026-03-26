@@ -130,34 +130,58 @@ class PhotoManager: ObservableObject {
     }
     
     @Published var duplicateGroups: [[PHAsset]] = []
-
+    @Published var allPhotosAssets: [PHAsset] = []
+    
+    
     func scanForDuplicates() {
-        let allAssets = screenshotAssets // Or allPhotos
+        // You can use allPhotosAssets or screenshotAssets here
+        let allAssets = allPhotosAssets
+        
         var groups: [[PHAsset]] = []
         let timeThreshold: TimeInterval = 60 // 1 minute
         
-        // Sort by date so we only compare neighbors
+        // 1. Keep track of what we've already grouped
+        var processedIDs = Set<String>()
+        
+        // 2. Sort by date to ensure neighbors are time-relevant
         let sorted = allAssets.sorted { ($0.creationDate ?? Date()) < ($1.creationDate ?? Date()) }
         
         for i in 0..<sorted.count {
-            var currentGroup: [PHAsset] = [sorted[i]]
+            let rootAsset = sorted[i]
+            
+            // Skip if this photo is already part of a duplicate group
+            if processedIDs.contains(rootAsset.localIdentifier) { continue }
+            
+            var currentGroup: [PHAsset] = [rootAsset]
             
             for j in i+1..<sorted.count {
-                let timeGap = sorted[j].creationDate!.timeIntervalSince(sorted[i].creationDate!)
-                if timeGap > timeThreshold { break } // Too far apart in time
+                let comparisonAsset = sorted[j]
+                
+                // Skip if this neighbor is already processed
+                if processedIDs.contains(comparisonAsset.localIdentifier) { continue }
+                
+                // Check time gap
+                let timeGap = comparisonAsset.creationDate!.timeIntervalSince(rootAsset.creationDate!)
+                if timeGap > timeThreshold { break }
                 
                 // Perform the heavy Vision check
-                computeSimilarity(asset1: sorted[i], asset2: sorted[j]) { distance in
-                    if distance < 15.0 { // 15 is a safe "similar" threshold
-                        currentGroup.append(sorted[j])
+                // Change 15.0 to 25.0 to be "more sensitive" to similarities
+                computeSimilarity(asset1: rootAsset, asset2: comparisonAsset) { distance in
+                    print("Similarity Distance: \(distance)") // Debug print to see the actual math
+                    if distance < 25.0 {
+                        currentGroup.append(comparisonAsset)
+                        processedIDs.insert(comparisonAsset.localIdentifier)
                     }
                 }
             }
             
             if currentGroup.count > 1 {
                 groups.append(currentGroup)
+                // Also mark the root photo as processed
+                processedIDs.insert(rootAsset.localIdentifier)
             }
         }
+        
         DispatchQueue.main.async {
             self.duplicateGroups = groups
         }
@@ -165,6 +189,14 @@ class PhotoManager: ObservableObject {
     func fetchMetadata() {
         let allPhotos = PHAsset.fetchAssets(with: .image, options: nil)
         self.photoCount = allPhotos.count
+        
+        var tempAll: [PHAsset] = []
+        
+        allPhotos.enumerateObjects { (asset, _, _) in
+            tempAll.append(asset)
+        }
+        self.allPhotosAssets = tempAll
+
 
         let screenshotOptions = PHFetchOptions()
         screenshotOptions.predicate = NSPredicate(format: "mediaSubtype == %d", PHAssetMediaSubtype.photoScreenshot.rawValue)
