@@ -13,6 +13,13 @@ class SelectionManager: ObservableObject {
         selectedAssetIDs.removeAll()
     }
     
+    func dragSelect(id: String) {
+        if !selectedAssetIDs.contains(id) {
+            selectedAssetIDs.insert(id)
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+    }
+    
     func toggleSelection(id: String) {
         if selectedAssetIDs.contains(id) {
             selectedAssetIDs.remove(id)
