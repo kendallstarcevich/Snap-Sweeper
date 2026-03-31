@@ -162,7 +162,7 @@ class PhotoManager: ObservableObject {
     func scanForDuplicates() {
         // 1. Move the whole operation to a background thread so the UI doesn't freeze
         DispatchQueue.global(qos: .userInitiated).async {
-            let allAssets = self.allPhotosAssets
+            let allAssets = self.allPhotosAssets.filter { !self.protectedAssetIDs.contains($0.localIdentifier) }
             print("SCAN DEBUG: Total photos in pool: \(allAssets.count)")
             
             var groups: [[PHAsset]] = []
