@@ -386,46 +386,125 @@ struct VaultResultsView: View {
 }
 struct DuplicatesView: View {
     @ObservedObject var photoManager: PhotoManager
+    // Track selected groups by their index in the array
+    @State private var selectedGroupIndices = Set<Int>()
+    
+    var totalBulkSavings: Int64 {
+        selectedGroupIndices.reduce(0) { sum, index in
+            sum + calculatePotentialSavings(photoManager.duplicateGroups[index])
+        }
+    }
     
     var body: some View {
-        List {
-            ForEach(0..<photoManager.duplicateGroups.count, id: \.self) { index in
-                let group = photoManager.duplicateGroups[index]
-                
-                NavigationLink(destination: DuplicateGroupDetailView(group: group, photoManager: photoManager)) {
+        VStack(spacing: 0) {
+            List {
+                ForEach(0..<photoManager.duplicateGroups.count, id: \.self) { index in
+                    let group = photoManager.duplicateGroups[index]
+                    let isSelected = selectedGroupIndices.contains(index)
+                    
                     HStack(spacing: 15) {
-                        // Preview of the first photo in the group
-                        PhotoThumbnail(asset: group.first!)
-                            .frame(width: 60, height: 60)
-                            .cornerRadius(8)
+                        // Group Selection Toggle
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.title2)
+                            .foregroundColor(isSelected ? .purple : .secondary)
+                            .onTapGesture {
+                                if isSelected { selectedGroupIndices.remove(index) }
+                                else { selectedGroupIndices.insert(index) }
+                            }
                         
-                        VStack(alignment: .leading) {
-                            Text("Group \(index + 1)")
-                                .font(.headline)
-                            Text("\(group.count) similar photos")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+                        NavigationLink(destination: DuplicateGroupDetailView(group: group, photoManager: photoManager)) {
+                            HStack {
+                                PhotoThumbnail(asset: group.first!)
+                                    .frame(width: 55, height: 55).cornerRadius(8)
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Group \(index + 1)").font(.headline)
+                                    Text("\(group.count) similar photos").font(.subheadline).foregroundColor(.secondary)
+                                }
+                                
+                                Spacer()
+                                
+                                Text("Save \(ByteCountFormatter.string(fromByteCount: calculatePotentialSavings(group), countStyle: .file))")
+                                    .font(.caption2).bold()
+                                    .padding(6).background(Color.purple.opacity(0.1)).foregroundColor(.purple).cornerRadius(6)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+            
+            // --- BULK ACTION BAR ---
+            if !selectedGroupIndices.isEmpty {
+                VStack(spacing: 12) {
+                    HStack(spacing: 15) {
+                        // Bulk Vault
+                        Button(action: { bulkVaultGroups() }) {
+                            VStack { Image(systemName: "shield.fill"); Text("Vault Groups").font(.caption).bold() }
+                                .frame(maxWidth: .infinity).padding().background(Color.green).foregroundColor(.white).cornerRadius(12)
                         }
                         
-                        Spacer()
-                        
-                        Text(ByteCountFormatter.string(fromByteCount: calculateGroupSize(group), countStyle: .file))
-                            .font(.caption)
-                            .padding(6)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(6)
+                        // Bulk Delete
+                        Button(action: { bulkDeleteGroups() }) {
+                            VStack { Image(systemName: "trash.fill"); Text("Delete Groups").font(.caption).bold() }
+                                .frame(maxWidth: .infinity).padding().background(Color.red).foregroundColor(.white).cornerRadius(12)
+                        }
                     }
-                    .padding(.vertical, 4)
+                    Text("Bulk action will save \(Text(ByteCountFormatter.string(fromByteCount: totalBulkSavings, countStyle: .file)).bold())")
+                        .font(.caption).foregroundColor(.secondary)
                 }
+                .padding().background(Color(UIColor.systemBackground)).shadow(radius: 10)
             }
         }
         .navigationTitle("Similar Photos")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(selectedGroupIndices.count == photoManager.duplicateGroups.count ? "None" : "All") {
+                    if selectedGroupIndices.count == photoManager.duplicateGroups.count { selectedGroupIndices.removeAll() }
+                    else { selectedGroupIndices = Set(0..<photoManager.duplicateGroups.count) }
+                }
+            }
+        }
     }
     
-    func calculateGroupSize(_ group: [PHAsset]) -> Int64 {
-        group.reduce(0) { $0 + photoManager.getSize(for: $1) }
+    // --- HELPER LOGIC ---
+    
+    func calculatePotentialSavings(_ group: [PHAsset]) -> Int64 {
+        guard group.count > 1 else { return 0 }
+        let total = group.reduce(0) { $0 + photoManager.getSize(for: $1) }
+        return total - photoManager.getSize(for: group.first!)
+    }
+    
+    func bulkDeleteGroups() {
+        var idsToDelete: [String] = []
+        for index in selectedGroupIndices {
+            let group = photoManager.duplicateGroups[index]
+            // Keep the first (index 0), delete the rest
+            let others = group.dropFirst().map { $0.localIdentifier }
+            idsToDelete.append(contentsOf: others)
+        }
+        
+        // Convert the Array to a Set here:
+        photoManager.deleteAssets(ids: Set(idsToDelete)) { success in
+            if success {
+                // Clear the UI state after a successful deletion
+                selectedGroupIndices.removeAll()
+                photoManager.scanForDuplicates()
+            }
+        }
+    }
+    
+    func bulkVaultGroups() {
+        for index in selectedGroupIndices {
+            let group = photoManager.duplicateGroups[index]
+            // Protect all photos in the selected groups
+            for asset in group { photoManager.toggleProtection(id: asset.localIdentifier) }
+        }
+        selectedGroupIndices.removeAll()
+        photoManager.scanForDuplicates()
     }
 }
+
 
 struct DuplicateGroupDetailView: View {
     let group: [PHAsset]
@@ -433,77 +512,74 @@ struct DuplicateGroupDetailView: View {
     @StateObject var selectionManager = SelectionManager()
     @Environment(\.dismiss) var dismiss
     
+    var formattedSelectionSize: String {
+        let bytes = selectionManager.calculateTotalSize(assets: group.filter { selectionManager.selectedAssetIDs.contains($0.localIdentifier) })
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
     var body: some View {
-        VStack {
-            // Horizontal Scroll for Comparison
+        VStack(spacing: 0) {
             TabView {
                 ForEach(group, id: \.localIdentifier) { asset in
                     VStack {
                         PhotoThumbnail(asset: asset)
-                            .frame(maxWidth: .infinity)
-                            .aspectRatio(1, contentMode: .fit)
-                            .cornerRadius(12)
-                            .padding()
+                            .aspectRatio(contentMode: .fit)
+                            .cornerRadius(12).padding()
                         
-                        VStack(spacing: 10) {
-                            Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "")
-                                .font(.caption)
-                            
-                            Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
-                                .bold()
-                        }
+                        Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
+                            .font(.subheadline).bold().foregroundColor(.secondary)
                         
-                        Button(action: {
-                            selectionManager.toggleSelection(id: asset.localIdentifier)
-                        }) {
-                            Label(
-                                selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "Marked for Deletion" : "Mark this one",
-                                systemImage: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "trash.fill" : "circle"
-                            )
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? Color.red : Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                        }
-                        .padding(.horizontal, 40)
+                        Button(action: { selectionManager.toggleSelection(id: asset.localIdentifier) }) {
+                            Label(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "Selected" : "Select to Delete",
+                                  systemImage: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle")
+                                .font(.headline).padding().frame(maxWidth: .infinity)
+                                .background(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? Color.red : Color.gray.opacity(0.2))
+                                .foregroundColor(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? .white : .primary)
+                                .cornerRadius(12)
+                        }.padding(.horizontal, 40).padding(.top, 10)
                     }
                 }
-            }
-            .tabViewStyle(.page)
-            .indexViewStyle(.page(backgroundDisplayMode: .always))
-            
-            // Bottom Action Bar
+            }.tabViewStyle(.page).indexViewStyle(.page(backgroundDisplayMode: .always))
+
+            // THE ACTION BAR (Matching your Screenshot/Video UI)
             if !selectionManager.selectedAssetIDs.isEmpty {
-                Button(action: {
-                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
-                        if success {
-                            photoManager.scanForDuplicates() // Re-scan to update groups
+                VStack(spacing: 15) {
+                    HStack(spacing: 15) {
+                        // VAULT BUTTON
+                        Button(action: {
+                            for id in selectionManager.selectedAssetIDs { photoManager.toggleProtection(id: id) }
+                            photoManager.scanForDuplicates()
                             dismiss()
+                        }) {
+                            VStack { Image(systemName: "shield.fill"); Text("Vault").font(.caption).bold() }
+                                .frame(maxWidth: .infinity).padding().background(Color.green).foregroundColor(.white).cornerRadius(12)
+                        }
+                        
+                        // DELETE BUTTON
+                        Button(action: {
+                            photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
+                                photoManager.scanForDuplicates()
+                                dismiss()
+                            }
+                        }) {
+                            VStack { Image(systemName: "trash.fill"); Text("Delete").font(.caption).bold() }
+                                .frame(maxWidth: .infinity).padding().background(Color.red).foregroundColor(.white).cornerRadius(12)
                         }
                     }
-                }) {
-                    Text("Delete Selected Duplicates")
-                        .bold()
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.red)
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
+                    Text("You will save \(Text(formattedSelectionSize).bold()) of space.").font(.caption2).foregroundColor(.secondary)
                 }
-                .padding()
+                .padding().background(Color(UIColor.systemBackground)).shadow(radius: 10)
             }
         }
-        .navigationTitle("Compare & Clean")
+        .navigationTitle("Review Duplicates")
         .onAppear {
-            // Auto-select everything except the first one as a suggestion
+            // Suggest deleting all but the first (usually the 'best') photo
             for i in 1..<group.count {
                 selectionManager.selectedAssetIDs.insert(group[i].localIdentifier)
             }
         }
     }
 }
-
 // MARK: - Core Supporting Views
 struct SelectionToggle: View {
     let id: String
