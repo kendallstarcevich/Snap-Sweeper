@@ -10,6 +10,24 @@ class PhotoManager: ObservableObject {
     @Published var protectedAssets: [PHAsset] = []
     @Published var videoAssets: [PHAsset] = []
     @Published var videoCount = 0
+    @Published var allPhotoAssets: [PHAsset] = []
+    @Published var blurryCount: Int = 0
+
+    func fetchAllPhotos() {
+       var assets: [PHAsset] = []
+      
+       let options = PHFetchOptions()
+       options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+      
+       let result = PHAsset.fetchAssets(with: .image, options: options)
+       result.enumerateObjects { asset, _, _ in
+           assets.append(asset)
+       }
+      
+       DispatchQueue.main.async {
+           self.allPhotoAssets = assets
+       }
+    }
     
     @Published var totalBytesDeleted: Int64 = UserDefaults.standard.value(forKey: "bytesDeleted") as? Int64 ?? 0
     
@@ -82,12 +100,13 @@ class PhotoManager: ObservableObject {
 
     func requestAccessAndFetch() {
         PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
-            if status == .authorized {
+            if status == .authorized || status == .limited{
                 DispatchQueue.main.async {
                     self.isAuthorized = true
                     self.fetchMetadata()
                     self.fetchProtectedAssets()
                     self.fetchVideos()
+                    self.fetchAllPhotos()
                 }
             }
         }

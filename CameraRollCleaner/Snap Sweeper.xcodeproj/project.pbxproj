@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		523C9D9B2F3527080095B2B0 /* Snap Sweeper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Snap Sweeper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		998C3AFA2F7B8AB6005F42D2 /* Snap Sweeper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Snap Sweeper.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -33,16 +33,8 @@
 			isa = PBXGroup;
 			children = (
 				523C9D9D2F3527080095B2B0 /* Swift Code */,
-				523C9D9C2F3527080095B2B0 /* Products */,
+				998C3AFA2F7B8AB6005F42D2 /* Snap Sweeper.app */,
 			);
-			sourceTree = "<group>";
-		};
-		523C9D9C2F3527080095B2B0 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				523C9D9B2F3527080095B2B0 /* Snap Sweeper.app */,
-			);
-			name = Products;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -67,7 +59,7 @@
 			packageProductDependencies = (
 			);
 			productName = CameraRollCleaner;
-			productReference = 523C9D9B2F3527080095B2B0 /* Snap Sweeper.app */;
+			productReference = 998C3AFA2F7B8AB6005F42D2 /* Snap Sweeper.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -95,7 +87,7 @@
 			mainGroup = 523C9D922F3527080095B2B0;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 523C9D9C2F3527080095B2B0 /* Products */;
+			productRefGroup = 523C9D922F3527080095B2B0;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (

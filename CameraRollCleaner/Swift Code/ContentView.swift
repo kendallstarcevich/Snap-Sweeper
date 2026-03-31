@@ -45,6 +45,8 @@ struct ContentView: View {
                     )
                     .padding(.top)
                     
+                    
+                    
                     NavigationLink(destination: ProtectedPhotosView(photoManager: photoManager)) {
                         HStack {
                             Image(systemName: "shield.checkered").foregroundColor(.green)
@@ -67,9 +69,11 @@ struct ContentView: View {
                             NavigationLink(destination: ResultsView(assets: photoManager.screenshotAssets, photoManager: photoManager)) {
                                 ActionCard(title: "Screenshots", count: photoManager.screenshotCount, icon: "iphone.gen1", color: .blue)
                             }
-                            NavigationLink(destination: Text("Blurry Scan Coming Soon")) {
-                                ActionCard(title: "Blurry Photos", count: 0, icon: "eye.slash.fill", color: .orange)
+                            NavigationLink(destination: BlurryPhotosView(photoManager: photoManager)) {
+                               ActionCard(title: "Blurry Photos", count: photoManager.blurryCount, icon: "eye.slash.fill", color: .orange)
                             }
+
+                            
                             NavigationLink(destination: Text("Duplicate Scan Coming Soon")) {
                                 ActionCard(title: "Duplicates", count: 0, icon: "square.on.square.fill", color: .purple)
                             }
