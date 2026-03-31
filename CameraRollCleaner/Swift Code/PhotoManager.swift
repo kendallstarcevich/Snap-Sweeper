@@ -81,10 +81,17 @@ class PhotoManager: ObservableObject {
     }
 
     func requestAccessAndFetch() {
-        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+        PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
+                // Fetch everything
+                let allPhotos = PHAsset.fetchAssets(with: .image, options: nil)
+                var tempAll: [PHAsset] = []
+                allPhotos.enumerateObjects { (asset, _, _) in
+                    tempAll.append(asset)
+                }
+                
                 DispatchQueue.main.async {
-                    self.isAuthorized = true
+                    self.allPhotosAssets = tempAll
                     self.fetchMetadata()
                     self.fetchProtectedAssets()
                     self.fetchVideos()
@@ -134,58 +141,59 @@ class PhotoManager: ObservableObject {
     
     
     func scanForDuplicates() {
-        // You can use allPhotosAssets or screenshotAssets here
-        let allAssets = allPhotosAssets
-        
-        var groups: [[PHAsset]] = []
-        let timeThreshold: TimeInterval = 60 // 1 minute
-        
-        // 1. Keep track of what we've already grouped
-        var processedIDs = Set<String>()
-        
-        // 2. Sort by date to ensure neighbors are time-relevant
-        let sorted = allAssets.sorted { ($0.creationDate ?? Date()) < ($1.creationDate ?? Date()) }
-        
-        for i in 0..<sorted.count {
-            let rootAsset = sorted[i]
+        // 1. Move the whole operation to a background thread so the UI doesn't freeze
+        DispatchQueue.global(qos: .userInitiated).async {
+            let allAssets = self.allPhotosAssets
+            print("SCAN DEBUG: Total photos in pool: \(allAssets.count)")
             
-            // Skip if this photo is already part of a duplicate group
-            if processedIDs.contains(rootAsset.localIdentifier) { continue }
+            var groups: [[PHAsset]] = []
+            var processedIDs = Set<String>()
+            let sorted = allAssets.sorted { ($0.creationDate ?? Date()) < ($1.creationDate ?? Date()) }
             
-            var currentGroup: [PHAsset] = [rootAsset]
-            
-            for j in i+1..<sorted.count {
-                let comparisonAsset = sorted[j]
+            let dispatchGroup = DispatchGroup()
+
+            for i in 0..<sorted.count {
+                let rootAsset = sorted[i]
+                if processedIDs.contains(rootAsset.localIdentifier) { continue }
                 
-                // Skip if this neighbor is already processed
-                if processedIDs.contains(comparisonAsset.localIdentifier) { continue }
+                var currentGroup: [PHAsset] = [rootAsset]
                 
-                // Check time gap
-                let timeGap = comparisonAsset.creationDate!.timeIntervalSince(rootAsset.creationDate!)
-                if timeGap > timeThreshold { break }
-                
-                // Perform the heavy Vision check
-                // Change 15.0 to 25.0 to be "more sensitive" to similarities
-                computeSimilarity(asset1: rootAsset, asset2: comparisonAsset) { distance in
-                    print("Similarity Distance: \(distance)") // Debug print to see the actual math
-                    if distance < 25.0 {
-                        currentGroup.append(comparisonAsset)
-                        processedIDs.insert(comparisonAsset.localIdentifier)
+                for j in i+1..<sorted.count {
+                    let comparisonAsset = sorted[j]
+                    if processedIDs.contains(comparisonAsset.localIdentifier) { continue }
+                    
+                    let timeGap = comparisonAsset.creationDate!.timeIntervalSince(rootAsset.creationDate!)
+                    if timeGap > 600 { break }
+                    
+                    dispatchGroup.enter()
+                    computeSimilarity(asset1: rootAsset, asset2: comparisonAsset) { distance in
+                        if distance < 25.0 {
+                            currentGroup.append(comparisonAsset)
+                            processedIDs.insert(comparisonAsset.localIdentifier)
+                        }
+                        dispatchGroup.leave()
                     }
+                }
+                
+                // This waits on the BACKGROUND thread, so the UI stays smooth
+                dispatchGroup.wait()
+                
+                if currentGroup.count > 1 {
+                    groups.append(currentGroup)
+                    processedIDs.insert(rootAsset.localIdentifier)
                 }
             }
             
-            if currentGroup.count > 1 {
-                groups.append(currentGroup)
-                // Also mark the root photo as processed
-                processedIDs.insert(rootAsset.localIdentifier)
+            // 2. Switch back to the Main Thread ONLY to update the UI
+            DispatchQueue.main.async {
+                print("SCAN COMPLETE: Found \(groups.count) groups")
+                self.duplicateGroups = groups
+                // Give the user a haptic "thump" to let them know the scan finished
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
         }
-        
-        DispatchQueue.main.async {
-            self.duplicateGroups = groups
-        }
     }
+    
     func fetchMetadata() {
         let allPhotos = PHAsset.fetchAssets(with: .image, options: nil)
         self.photoCount = allPhotos.count

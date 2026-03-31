@@ -90,11 +90,15 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
+                        // 1. Fetch the items
                         photoManager.requestAccessAndFetch()
                         storageInfo = StorageManager.getStorageInfo()
-                        photoManager.scanForDuplicates()
-                    }) {
                         
+                        // 2. Wait a split second for the fetch to populate before scanning
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            photoManager.scanForDuplicates()
+                        }
+                    }) {
                         Image(systemName: "arrow.clockwise")
                     }
                 }
