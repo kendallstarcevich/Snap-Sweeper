@@ -67,8 +67,8 @@ struct ContentView: View {
                             NavigationLink(destination: ResultsView(assets: photoManager.screenshotAssets, photoManager: photoManager)) {
                                 ActionCard(title: "Screenshots", count: photoManager.screenshotCount, icon: "iphone.gen1", color: .blue)
                             }
-                            NavigationLink(destination: Text("Blurry Scan Coming Soon")) {
-                                ActionCard(title: "Blurry Photos", count: 0, icon: "eye.slash.fill", color: .orange)
+                            NavigationLink(destination: BlurryPhotosView(photoManager: photoManager)) {
+                               ActionCard(title: "Blurry Photos", count: photoManager.blurryCount, icon: "eye.slash.fill", color: .orange)
                             }
                             NavigationLink(destination: DuplicatesView(photoManager: photoManager)) {
                                 ActionCard(
