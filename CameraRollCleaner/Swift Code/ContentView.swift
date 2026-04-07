@@ -679,9 +679,53 @@ struct ActionCard: View {
 
 struct ProtectedPhotosView: View {
     @ObservedObject var photoManager: PhotoManager
+    @StateObject private var authManager = AuthManager()
+    
     var body: some View {
-        VaultResultsView(assets: photoManager.protectedAssets, photoManager: photoManager)
-            .navigationTitle("Vault").onAppear { photoManager.fetchProtectedAssets() }
+        Group {
+            if authManager.isUnlocked {
+                // The actual Vault Content
+                VaultResultsView(assets: photoManager.protectedAssets, photoManager: photoManager)
+                    .navigationTitle("Vault")
+                    .onAppear { photoManager.fetchProtectedAssets() }
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            Button("Lock") { authManager.lock() }
+                        }
+                    }
+            } else {
+                // The Locked "Gate" Screen
+                VStack(spacing: 20) {
+                    Image(systemName: "lock.shield.fill")
+                        .font(.system(size: 80))
+                        .foregroundColor(.green)
+                    
+                    Text("Vault is Locked")
+                        .font(.title2).bold()
+                    
+                    Text("Use FaceID to access your protected media.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+                    
+                    Button(action: { authManager.authenticate() }) {
+                        Label("Unlock Vault", systemImage: "faceid")
+                            .font(.headline)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.green)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 40)
+                }
+                .onAppear {
+                    // Automatically trigger FaceID when the view opens
+                    authManager.authenticate()
+                }
+            }
+        }
     }
 }
 
