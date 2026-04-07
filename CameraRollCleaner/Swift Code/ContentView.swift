@@ -72,7 +72,7 @@ struct ContentView: View {
                             }
                             NavigationLink(destination: DuplicatesView(photoManager: photoManager)) {
                                 ActionCard(
-                                    title: "Duplicates",
+                                    title: "Similarity Score",
                                     count: photoManager.duplicateGroups.count,
                                     icon: "square.on.square.fill",
                                     color: .purple
@@ -571,7 +571,7 @@ struct DuplicateGroupDetailView: View {
                 .padding().background(Color(UIColor.systemBackground)).shadow(radius: 10)
             }
         }
-        .navigationTitle("Review Duplicates")
+        .navigationTitle("Review Similar Photos")
         .onAppear {
             // Suggest deleting all but the first (usually the 'best') photo
             for i in 1..<group.count {
