@@ -109,7 +109,7 @@ class PhotoManager: ObservableObject {
                 }
                 
                 DispatchQueue.main.async {
-                    self.allPhotosAssets = tempAll
+                    self.allPhotoAssets = tempAll
                     self.fetchMetadata()
                     self.fetchProtectedAssets()
                     self.fetchVideos()
@@ -156,13 +156,12 @@ class PhotoManager: ObservableObject {
     }
     
     @Published var duplicateGroups: [[PHAsset]] = []
-    @Published var allPhotosAssets: [PHAsset] = []
     
     
     func scanForDuplicates() {
         // 1. Move the whole operation to a background thread so the UI doesn't freeze
         DispatchQueue.global(qos: .userInitiated).async {
-            let allAssets = self.allPhotosAssets.filter { !self.protectedAssetIDs.contains($0.localIdentifier) }
+            let allAssets = self.allPhotoAssets.filter { !self.protectedAssetIDs.contains($0.localIdentifier) }
             print("SCAN DEBUG: Total photos in pool: \(allAssets.count)")
             
             var groups: [[PHAsset]] = []
@@ -222,7 +221,7 @@ class PhotoManager: ObservableObject {
         allPhotos.enumerateObjects { (asset, _, _) in
             tempAll.append(asset)
         }
-        self.allPhotosAssets = tempAll
+        self.allPhotoAssets = tempAll
 
 
         let screenshotOptions = PHFetchOptions()
