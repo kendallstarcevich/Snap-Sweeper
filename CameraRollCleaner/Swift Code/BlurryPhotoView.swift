@@ -154,8 +154,8 @@ struct BlurryPhotosView: View {
                     .padding(.horizontal, 2)
                     .padding(.top, 4)
                 }
-                .gesture(
-                    DragGesture(minimumDistance: 15)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 15, coordinateSpace: .global)
                         .onChanged { dragLocation = $0.location }
                         .onEnded { _ in dragLocation = .zero }
                 )

@@ -179,8 +179,8 @@ struct VideoResultsView: View {
                 .padding(.horizontal, 2)
                 .padding(.top, 4)
             }
-            .gesture(
-                DragGesture(minimumDistance: 15)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 15, coordinateSpace: .global)
                     .onChanged { dragLocation = $0.location }
                     .onEnded { _ in dragLocation = .zero }
             )
@@ -253,6 +253,8 @@ struct ResultsView: View {
                                 .aspectRatio(1, contentMode: .fill)
                                 .clipped()
                                 .cornerRadius(4)
+                                .contentShape(Rectangle())
+
                         }
                         .buttonStyle(.plain)
                         .background(
@@ -273,11 +275,12 @@ struct ResultsView: View {
                 .padding(.horizontal, 2)
                 .padding(.top, 4)
             }
-            .gesture(
-                DragGesture(minimumDistance: 15)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 15, coordinateSpace: .global)
                     .onChanged { dragLocation = $0.location }
                     .onEnded { _ in dragLocation = .zero }
             )
+
             
             if !selectionManager.selectedAssetIDs.isEmpty {
                 VStack(spacing: 12) {
@@ -350,6 +353,7 @@ struct VaultResultsView: View {
                                 .aspectRatio(1, contentMode: .fill)
                                 .clipped()
                                 .cornerRadius(4)
+                                .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                         .background(
@@ -370,8 +374,8 @@ struct VaultResultsView: View {
                 .padding(.horizontal, 2)
                 .padding(.top, 4)
             }
-            .gesture(
-                DragGesture(minimumDistance: 15)
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 15, coordinateSpace: .global)
                     .onChanged { dragLocation = $0.location }
                     .onEnded { _ in dragLocation = .zero }
             )
@@ -416,6 +420,7 @@ struct DuplicatesView: View {
                             HStack {
                                 PhotoThumbnail(asset: group.first!)
                                     .frame(width: 55, height: 55).cornerRadius(8)
+                                    .contentShape(Rectangle())
                                 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Group \(index + 1)").font(.headline)
@@ -525,6 +530,7 @@ struct DuplicateGroupDetailView: View {
                         PhotoThumbnail(asset: asset)
                             .aspectRatio(contentMode: .fit)
                             .cornerRadius(12).padding()
+                            .contentShape(Rectangle())
                         
                         Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
                             .font(.subheadline).bold().foregroundColor(.secondary)
@@ -628,6 +634,7 @@ struct VideoThumbnail: View {
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
             PhotoThumbnail(asset: asset)
+                .contentShape(Rectangle())
         }
     }
 }
