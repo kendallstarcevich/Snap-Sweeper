@@ -174,17 +174,10 @@ struct VideoResultsView: View {
                 LazyVGrid(columns: columns, spacing: 2) { // Spacing set to 2 for a tighter grid
                     ForEach(photoManager.videoAssets, id: \.localIdentifier) { asset in
                         NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: false)) {
-                            // --- SQUARE ENFORCEMENT BLOCK ---
-                            ZStack {
-                                VideoThumbnail(asset: asset)
-                                    .aspectRatio(1, contentMode: .fill) // Fill the square
-                                    .frame(minWidth: 0, maxWidth: .infinity)
-                                    .clipped() // Clip any horizontal/vertical bleed
-                            }
-                            .aspectRatio(1, contentMode: .fit) // Lock container to 1:1
-                            .cornerRadius(4)
-                            // --------------------------------
-                        }
+                            PhotoThumbnail(asset: asset)
+                                                .cornerRadius(4)
+                                            
+                                        }
                         .buttonStyle(.plain)
                         .background(
                             GeometryReader { geo in
@@ -271,18 +264,10 @@ struct ResultsView: View {
                 LazyVGrid(columns: columns, spacing: 2) { // 2px spacing to match manual review
                     ForEach(assets, id: \.localIdentifier) { asset in
                         NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
-                            // --- SQUARE ENFORCEMENT BLOCK ---
-                            ZStack {
-                                PhotoThumbnail(asset: asset)
-                                    .aspectRatio(1, contentMode: .fill) // Fill the square
-                                    .frame(minWidth: 0, maxWidth: .infinity)
-                                    .clipped() // Clip any horizontal/vertical bleed
-                            }
-                            .aspectRatio(1, contentMode: .fit) // Lock container to 1:1
-                            .cornerRadius(4)
-                            .contentShape(Rectangle())
-                            // --------------------------------
-                        }
+                            PhotoThumbnail(asset: asset)
+                                                .cornerRadius(4)
+                                            
+                                        }
                         .buttonStyle(.plain)
                         .background(
                             GeometryReader { geo in
@@ -371,18 +356,10 @@ struct VaultResultsView: View {
                 LazyVGrid(columns: columns, spacing: 2) { // Standardizing to 2px spacing
                     ForEach(assets, id: \.localIdentifier) { asset in
                         NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: true)) {
-                            // --- SQUARE ENFORCEMENT BLOCK ---
-                            ZStack {
-                                PhotoThumbnail(asset: asset)
-                                    .aspectRatio(1, contentMode: .fill) // Fill the square
-                                    .frame(minWidth: 0, maxWidth: .infinity)
-                                    .clipped() // Prevent overflow into other grid cells
-                            }
-                            .aspectRatio(1, contentMode: .fit) // Lock the cell to 1:1 ratio
-                            .cornerRadius(4)
-                            .contentShape(Rectangle())
-                            // --------------------------------
-                        }
+                            PhotoThumbnail(asset: asset)
+                                                .cornerRadius(4)
+                                            
+                                        }
                         .buttonStyle(.plain)
                         .background(
                             GeometryReader { geo in
@@ -672,24 +649,26 @@ struct PhotoThumbnail: View {
     @State private var image: UIImage? = nil
     
     var body: some View {
-        Group {
-            if let image = image {
-                Image(uiImage: image)
-                    .resizable()
-                    // This is the critical line: fill the frame, then clip the excess
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                Color.gray.opacity(0.2)
+        // GeometryReader calculates the available width of the grid cell
+        GeometryReader { geometry in
+            Group {
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill) // Fills the entire square
+                        .frame(width: geometry.size.width, height: geometry.size.width) // Forces height to match width
+                        .clipped() // Cuts off the horizontal or vertical overlap
+                } else {
+                    Color.gray.opacity(0.2)
+                }
             }
         }
-        // This ensures the Group itself stays a square and clips any 'overflow'
-        // from wide/tall photos
-        .aspectRatio(1, contentMode: .fill)
-        .clipped()
+        // This keeps the "box" square even before the image loads
+        .aspectRatio(1, contentMode: .fit)
         .onAppear {
             PHImageManager.default().requestImage(
                 for: asset,
-                targetSize: CGSize(width: 400, height: 400), // Slightly higher for retina clarity
+                targetSize: CGSize(width: 400, height: 400),
                 contentMode: .aspectFill,
                 options: nil
             ) { img, _ in self.image = img }
@@ -772,15 +751,10 @@ struct ManualReviewView: View {
                     ForEach(processedAssets, id: \.localIdentifier) { asset in
                         NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
                             // --- THIS BLOCK ENSURES PERFECT SQUARES ---
-                            ZStack {
-                                PhotoThumbnail(asset: asset)
-                                    .aspectRatio(1, contentMode: .fill) // Forces 1:1 ratio
-                                    .frame(minWidth: 0, maxWidth: .infinity) // Fills column width
-                                    .clipped() // Prevents horizontal/vertical overflow
-                            }
-                            .aspectRatio(1, contentMode: .fit) // Locks the container to a square
-                            // ------------------------------------------
-                        }
+                            PhotoThumbnail(asset: asset)
+                                                .cornerRadius(4)
+                                            
+                                        }
                         .buttonStyle(.plain)
                         .background(
                             GeometryReader { geo in
