@@ -219,7 +219,6 @@ struct ResultsView: View {
     @ObservedObject var photoManager: PhotoManager
     @StateObject var selectionManager = SelectionManager()
     @State private var dragLocation: CGPoint = .zero
-    @State private var hasInitialSelected = false
     
     let columns = [GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4), GridItem(.flexible(), spacing: 4)]
     
@@ -249,8 +248,8 @@ struct ResultsView: View {
                     ForEach(assets, id: \.localIdentifier) { asset in
                         NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
                             PhotoThumbnail(asset: asset)
-                                .frame(minWidth: 0, maxWidth: .infinity)
-                                .aspectRatio(1, contentMode: .fill)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 120)
                                 .clipped()
                                 .cornerRadius(4)
                                 .contentShape(Rectangle())
@@ -305,14 +304,8 @@ struct ResultsView: View {
             }
         }
         .navigationTitle("Review")
-        .onAppear {
-            if !hasInitialSelected {
-                selectionManager.selectAll(assets: assets)
-                hasInitialSelected = true
-            }
         }
     }
-}
 
 // MARK: - Vault View
 struct VaultResultsView: View {
