@@ -171,19 +171,24 @@ struct VideoResultsView: View {
             .padding().background(Color(UIColor.secondarySystemBackground))
 
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 4) {
+                LazyVGrid(columns: columns, spacing: 2) { // Spacing set to 2 for a tighter grid
                     ForEach(photoManager.videoAssets, id: \.localIdentifier) { asset in
                         NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: false)) {
-                            VideoThumbnail(asset: asset)
-                                .frame(minWidth: 0, maxWidth: .infinity)
-                                .aspectRatio(1, contentMode: .fill)
-                                .clipped()
-                                .cornerRadius(4)
+                            // --- SQUARE ENFORCEMENT BLOCK ---
+                            ZStack {
+                                VideoThumbnail(asset: asset)
+                                    .aspectRatio(1, contentMode: .fill) // Fill the square
+                                    .frame(minWidth: 0, maxWidth: .infinity)
+                                    .clipped() // Clip any horizontal/vertical bleed
+                            }
+                            .aspectRatio(1, contentMode: .fit) // Lock container to 1:1
+                            .cornerRadius(4)
+                            // --------------------------------
                         }
                         .buttonStyle(.plain)
                         .background(
                             GeometryReader { geo in
-                                Color.clear.onChange(of: dragLocation) { oldLoc, newLoc in
+                                Color.clear.onChange(of: dragLocation) { _, newLoc in
                                     if geo.frame(in: .global).contains(newLoc) {
                                         selectionManager.dragSelect(id: asset.localIdentifier)
                                     }
@@ -198,8 +203,7 @@ struct VideoResultsView: View {
                 }
                 .padding(.horizontal, 2)
                 .padding(.top, 4)
-            }
-            .simultaneousGesture(
+            }            .simultaneousGesture(
                 DragGesture(minimumDistance: 15, coordinateSpace: .global)
                     .onChanged { dragLocation = $0.location }
                     .onEnded { _ in dragLocation = .zero }
@@ -264,21 +268,25 @@ struct ResultsView: View {
             .padding().background(Color(UIColor.secondarySystemBackground))
 
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 4) {
+                LazyVGrid(columns: columns, spacing: 2) { // 2px spacing to match manual review
                     ForEach(assets, id: \.localIdentifier) { asset in
                         NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
-                            PhotoThumbnail(asset: asset)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 120)
-                                .clipped()
-                                .cornerRadius(4)
-                                .contentShape(Rectangle())
-
+                            // --- SQUARE ENFORCEMENT BLOCK ---
+                            ZStack {
+                                PhotoThumbnail(asset: asset)
+                                    .aspectRatio(1, contentMode: .fill) // Fill the square
+                                    .frame(minWidth: 0, maxWidth: .infinity)
+                                    .clipped() // Clip any horizontal/vertical bleed
+                            }
+                            .aspectRatio(1, contentMode: .fit) // Lock container to 1:1
+                            .cornerRadius(4)
+                            .contentShape(Rectangle())
+                            // --------------------------------
                         }
                         .buttonStyle(.plain)
                         .background(
                             GeometryReader { geo in
-                                Color.clear.onChange(of: dragLocation) { oldLoc, newLoc in
+                                Color.clear.onChange(of: dragLocation) { _, newLoc in
                                     if geo.frame(in: .global).contains(newLoc) {
                                         selectionManager.dragSelect(id: asset.localIdentifier)
                                     }
@@ -294,6 +302,8 @@ struct ResultsView: View {
                 .padding(.horizontal, 2)
                 .padding(.top, 4)
             }
+            
+            
             .simultaneousGesture(
                 DragGesture(minimumDistance: 15, coordinateSpace: .global)
                     .onChanged { dragLocation = $0.location }
@@ -358,20 +368,25 @@ struct VaultResultsView: View {
             .padding().background(Color(UIColor.secondarySystemBackground))
 
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 4) {
+                LazyVGrid(columns: columns, spacing: 2) { // Standardizing to 2px spacing
                     ForEach(assets, id: \.localIdentifier) { asset in
                         NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: true)) {
-                            PhotoThumbnail(asset: asset)
-                                .frame(minWidth: 0, maxWidth: .infinity)
-                                .aspectRatio(1, contentMode: .fill)
-                                .clipped()
-                                .cornerRadius(4)
-                                .contentShape(Rectangle())
+                            // --- SQUARE ENFORCEMENT BLOCK ---
+                            ZStack {
+                                PhotoThumbnail(asset: asset)
+                                    .aspectRatio(1, contentMode: .fill) // Fill the square
+                                    .frame(minWidth: 0, maxWidth: .infinity)
+                                    .clipped() // Prevent overflow into other grid cells
+                            }
+                            .aspectRatio(1, contentMode: .fit) // Lock the cell to 1:1 ratio
+                            .cornerRadius(4)
+                            .contentShape(Rectangle())
+                            // --------------------------------
                         }
                         .buttonStyle(.plain)
                         .background(
                             GeometryReader { geo in
-                                Color.clear.onChange(of: dragLocation) { oldLoc, newLoc in
+                                Color.clear.onChange(of: dragLocation) { _, newLoc in
                                     if geo.frame(in: .global).contains(newLoc) {
                                         selectionManager.dragSelect(id: asset.localIdentifier)
                                     }
@@ -655,16 +670,34 @@ struct VideoThumbnail: View {
 struct PhotoThumbnail: View {
     let asset: PHAsset
     @State private var image: UIImage? = nil
+    
     var body: some View {
         Group {
-            if let image = image { Image(uiImage: image).resizable().aspectRatio(contentMode: .fill) }
-            else { Color.gray.opacity(0.2) }
+            if let image = image {
+                Image(uiImage: image)
+                    .resizable()
+                    // This is the critical line: fill the frame, then clip the excess
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                Color.gray.opacity(0.2)
+            }
         }
+        // This ensures the Group itself stays a square and clips any 'overflow'
+        // from wide/tall photos
+        .aspectRatio(1, contentMode: .fill)
+        .clipped()
         .onAppear {
-            PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 300, height: 300), contentMode: .aspectFill, options: nil) { img, _ in self.image = img }
+            PHImageManager.default().requestImage(
+                for: asset,
+                targetSize: CGSize(width: 400, height: 400), // Slightly higher for retina clarity
+                contentMode: .aspectFill,
+                options: nil
+            ) { img, _ in self.image = img }
         }
     }
 }
+
+
 struct ManualReviewView: View {
     @ObservedObject var photoManager: PhotoManager
     @StateObject var selectionManager = SelectionManager()
@@ -738,14 +771,15 @@ struct ManualReviewView: View {
                 LazyVGrid(columns: columns, spacing: 2) {
                     ForEach(processedAssets, id: \.localIdentifier) { asset in
                         NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
-                            // Container to force square aspect ratio
+                            // --- THIS BLOCK ENSURES PERFECT SQUARES ---
                             ZStack {
                                 PhotoThumbnail(asset: asset)
-                                    .frame(minWidth: 0, maxWidth: .infinity)
-                                    .aspectRatio(1, contentMode: .fill) // Forces 1:1
-                                    .clipped() // Cuts off the overlap
+                                    .aspectRatio(1, contentMode: .fill) // Forces 1:1 ratio
+                                    .frame(minWidth: 0, maxWidth: .infinity) // Fills column width
+                                    .clipped() // Prevents horizontal/vertical overflow
                             }
-                            .aspectRatio(1, contentMode: .fit) // Ensures the cell itself is square
+                            .aspectRatio(1, contentMode: .fit) // Locks the container to a square
+                            // ------------------------------------------
                         }
                         .buttonStyle(.plain)
                         .background(
