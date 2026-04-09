@@ -1,6 +1,7 @@
 import Photos
 import SwiftUI
 import Combine
+import CoreLocation
 
 class PhotoManager: ObservableObject {
     @Published var photoCount = 0
@@ -13,6 +14,7 @@ class PhotoManager: ObservableObject {
     @Published var allPhotoAssets: [PHAsset] = []
     @Published var blurryCount: Int = 0
     @Published var allAssets: [PHAsset] = []
+    @Published var localizedAssets: [PHAsset] = []
     
     func fetchAllAssets() {
         let options = PHFetchOptions()
@@ -27,6 +29,25 @@ class PhotoManager: ObservableObject {
         
         DispatchQueue.main.async {
             self.allAssets = temp
+        }
+    }
+    
+    func fetchLocalizedAssets() {
+        let options = PHFetchOptions()
+        // Remove the predicate that caused the crash
+        let result = PHAsset.fetchAssets(with: options)
+        
+        var temp: [PHAsset] = []
+        result.enumerateObjects { (asset, _, _) in
+            // Filter in Swift logic instead of the fetch request
+            if asset.location != nil {
+                temp.append(asset)
+            }
+        }
+        
+        DispatchQueue.main.async {
+            self.localizedAssets = temp
+            print("Successfully loaded \(temp.count) localized assets.")
         }
     }
     

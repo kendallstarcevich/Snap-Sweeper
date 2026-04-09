@@ -2,6 +2,7 @@ import SwiftUI
 import Photos
 import Foundation
 import AVKit
+import MapKit
 
 // MARK: - Storage Models
 struct StorageInfo {
@@ -124,6 +125,75 @@ struct ContentView: View {
                 }
             }
         }
+    }
+}
+
+struct PhotoAnnotation: Identifiable {
+    let id = UUID()
+    let asset: PHAsset
+    let coordinate: CLLocationCoordinate2D
+}
+
+struct MapSweeperView: View {
+    @ObservedObject var photoManager: PhotoManager
+    @State private var startDate = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
+    @State private var endDate = Date()
+    
+    // Default region (e.g., center of US)
+    @State private var region = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 37.0902, longitude: -95.7129),
+        span: MKCoordinateSpan(latitudeDelta: 50, longitudeDelta: 50)
+    )
+    
+    var annotations: [PhotoAnnotation] {
+        photoManager.localizedAssets
+            .filter { asset in
+                guard let date = asset.creationDate else { return false }
+                return date >= startDate && date <= endDate
+            }
+            .compactMap { asset in
+                guard let loc = asset.location else { return nil }
+                return PhotoAnnotation(asset: asset, coordinate: loc.coordinate)
+            }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // --- DATE FILTER HEADER ---
+            HStack {
+                DatePicker("", selection: $startDate, displayedComponents: .date)
+                    .labelsHidden()
+                Text("to")
+                DatePicker("", selection: $endDate, displayedComponents: .date)
+                    .labelsHidden()
+            }
+            .padding()
+            .background(Color(UIColor.secondarySystemBackground))
+
+            // --- THE INTERACTIVE MAP ---
+            Map(coordinateRegion: $region, annotationItems: annotations) { annotation in
+                MapAnnotation(coordinate: annotation.coordinate) {
+                    NavigationLink(destination: PhotoDetailView(asset: annotation.asset, photoManager: photoManager, selectionManager: SelectionManager())) {
+                        VStack(spacing: 4) {
+                            PhotoThumbnail(asset: annotation.asset)
+                                .frame(width: 40, height: 40)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                                .shadow(radius: 3)
+                            
+                            Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: annotation.asset), countStyle: .file))
+                                .font(.system(size: 8, weight: .bold))
+                                .padding(2)
+                                .background(Color.black.opacity(0.6))
+                                .foregroundColor(.white)
+                                .cornerRadius(4)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Map Sweeper")
+        .onAppear { photoManager.fetchLocalizedAssets() }
     }
 }
 
