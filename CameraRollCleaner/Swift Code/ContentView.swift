@@ -25,6 +25,7 @@ class StorageManager {
 }
 
 // MARK: - Main Dashboard
+// MARK: - Main Dashboard
 struct ContentView: View {
     @StateObject var photoManager = PhotoManager()
     @State private var storageInfo = StorageManager.getStorageInfo()
@@ -38,6 +39,7 @@ struct ContentView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 25) {
+                    // 1. Storage Gauge
                     StorageGaugeView(
                         usedBytes: storageInfo.usedBytes,
                         totalBytes: storageInfo.totalBytes,
@@ -45,6 +47,7 @@ struct ContentView: View {
                     )
                     .padding(.top)
                     
+                    // 2. Protected Vault Link
                     NavigationLink(destination: ProtectedPhotosView(photoManager: photoManager)) {
                         HStack {
                             Image(systemName: "shield.checkered").foregroundColor(.green)
@@ -60,6 +63,25 @@ struct ContentView: View {
                     }
                     .padding(.horizontal)
 
+                    // 3. NEW POSITION: Manual Review (All Media)
+                    NavigationLink(destination: ManualReviewView(photoManager: photoManager)) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("All Media").font(.headline)
+                                Text("Manual sort by size, date, or type").font(.subheadline)
+                            }
+                            Spacer()
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.title2)
+                                .foregroundColor(.blue)
+                        }
+                        .padding()
+                        .background(Color.blue.opacity(0.1))
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal)
+
+                    // 4. Smart Clean Actions
                     VStack(alignment: .leading, spacing: 15) {
                         Text("Smart Clean Actions").font(.title2).bold()
                         
@@ -68,7 +90,7 @@ struct ContentView: View {
                                 ActionCard(title: "Screenshots", count: photoManager.screenshotCount, icon: "iphone.gen1", color: .blue)
                             }
                             NavigationLink(destination: BlurryPhotosView(photoManager: photoManager)) {
-                               ActionCard(title: "Blurry Photos", count: photoManager.blurryCount, icon: "eye.slash.fill", color: .orange)
+                                ActionCard(title: "Blurry Photos", count: photoManager.blurryCount, icon: "eye.slash.fill", color: .orange)
                             }
                             NavigationLink(destination: DuplicatesView(photoManager: photoManager)) {
                                 ActionCard(
@@ -90,11 +112,9 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: {
-                        // 1. Fetch the items
                         photoManager.requestAccessAndFetch()
                         storageInfo = StorageManager.getStorageInfo()
                         
-                        // 2. Wait a split second for the fetch to populate before scanning
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                             photoManager.scanForDuplicates()
                         }
@@ -645,6 +665,150 @@ struct PhotoThumbnail: View {
         }
     }
 }
+struct ManualReviewView: View {
+    @ObservedObject var photoManager: PhotoManager
+    @StateObject var selectionManager = SelectionManager()
+    @State private var dragLocation: CGPoint = .zero
+    
+    // Filter & Sort States
+    @State private var selectedSort: PhotoManager.SortStrategy = .newest
+    @State private var filterPhotos = true
+    @State private var filterVideos = true
+    
+    // Grid setup: 3 columns with 2px spacing to match Screenshots view
+    let columns = [
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2)
+    ]
+    
+    var processedAssets: [PHAsset] {
+        var filtered = photoManager.allAssets.filter { asset in
+            if asset.mediaType == .image && filterPhotos { return true }
+            if asset.mediaType == .video && filterVideos { return true }
+            return false
+        }
+        
+        // Exclude already protected items
+        filtered = filtered.filter { !photoManager.protectedAssetIDs.contains($0.localIdentifier) }
+        
+        switch selectedSort {
+        case .newest: return filtered.sorted { ($0.creationDate ?? Date()) > ($1.creationDate ?? Date()) }
+        case .oldest: return filtered.sorted { ($0.creationDate ?? Date()) < ($1.creationDate ?? Date()) }
+        case .largest: return filtered.sorted { photoManager.getSize(for: $0) > photoManager.getSize(for: $1) }
+        }
+    }
+
+    var formattedSize: String {
+        let selectedAssets = processedAssets.filter { selectionManager.selectedAssetIDs.contains($0.localIdentifier) }
+        let bytes = selectionManager.calculateTotalSize(assets: selectedAssets)
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // --- HEADER: TYPE FILTER & SEGMENTED SORT ---
+            VStack(spacing: 12) {
+                HStack {
+                    Text("Show:").font(.caption).bold().foregroundColor(.secondary)
+                    Toggle("Photos", isOn: $filterPhotos).toggleStyle(.button)
+                    Toggle("Videos", isOn: $filterVideos).toggleStyle(.button)
+                    Spacer()
+                    Button(selectionManager.selectedAssetIDs.count == processedAssets.count && !processedAssets.isEmpty ? "Deselect All" : "Select All") {
+                        if selectionManager.selectedAssetIDs.count == processedAssets.count {
+                            selectionManager.deselectAll()
+                        } else {
+                            selectionManager.selectAll(assets: processedAssets)
+                        }
+                    }.font(.caption).bold()
+                }
+                
+                Picker("Sort", selection: $selectedSort) {
+                    ForEach(PhotoManager.SortStrategy.allCases, id: \.self) { strategy in
+                        Text(strategy.rawValue).tag(strategy)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+            .padding()
+            .background(Color(UIColor.secondarySystemBackground))
+
+            // --- THE UNIFORM SQUARE GRID ---
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 2) {
+                    ForEach(processedAssets, id: \.localIdentifier) { asset in
+                        NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
+                            // Container to force square aspect ratio
+                            ZStack {
+                                PhotoThumbnail(asset: asset)
+                                    .frame(minWidth: 0, maxWidth: .infinity)
+                                    .aspectRatio(1, contentMode: .fill) // Forces 1:1
+                                    .clipped() // Cuts off the overlap
+                            }
+                            .aspectRatio(1, contentMode: .fit) // Ensures the cell itself is square
+                        }
+                        .buttonStyle(.plain)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.onChange(of: dragLocation) { old, newLoc in
+                                    if geo.frame(in: .global).contains(newLoc) {
+                                        selectionManager.dragSelect(id: asset.localIdentifier)
+                                    }
+                                }
+                            }
+                        )
+                        .overlay(alignment: .bottomTrailing) { VideoBadge(asset: asset) }
+                        .overlay(alignment: .topTrailing) {
+                            SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
+                        }
+                    }
+                }
+                .padding(.top, 2)
+            }
+            .gesture(
+                DragGesture(minimumDistance: 15)
+                    .onChanged { dragLocation = $0.location }
+                    .onEnded { _ in dragLocation = .zero }
+            )
+
+            // --- DUAL ACTION BAR (VAULT & DELETE) ---
+            if !selectionManager.selectedAssetIDs.isEmpty {
+                VStack(spacing: 15) {
+                    HStack(spacing: 15) {
+                        // MOVE TO VAULT
+                        Button(action: {
+                            for id in selectionManager.selectedAssetIDs { photoManager.toggleProtection(id: id) }
+                            selectionManager.deselectAll()
+                            photoManager.fetchAllAssets()
+                        }) {
+                            VStack { Image(systemName: "shield.fill"); Text("Keep").font(.caption).bold() }
+                                .frame(maxWidth: .infinity).padding().background(Color.green).foregroundColor(.white).cornerRadius(12)
+                        }
+                        
+                        // DELETE
+                        Button(action: {
+                            photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
+                                selectionManager.deselectAll()
+                                photoManager.fetchAllAssets()
+                            }
+                        }) {
+                            VStack { Image(systemName: "trash.fill"); Text("Delete").font(.caption).bold() }
+                                .frame(maxWidth: .infinity).padding().background(Color.red).foregroundColor(.white).cornerRadius(12)
+                        }
+                    }
+                    Text("Selected: \(selectionManager.selectedAssetIDs.count) items (\(formattedSize))")
+                        .font(.caption2).foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(UIColor.systemBackground))
+                .shadow(color: .black.opacity(0.1), radius: 10, y: -5)
+            }
+        }
+        .navigationTitle("Manual Review")
+        .onAppear { photoManager.fetchAllAssets() }
+    }
+}
+
 
 struct StorageGaugeView: View {
     let usedBytes: Int64; let totalBytes: Int64; let deletedBytes: Int64

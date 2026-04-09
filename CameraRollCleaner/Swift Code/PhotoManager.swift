@@ -12,7 +12,24 @@ class PhotoManager: ObservableObject {
     @Published var videoCount = 0
     @Published var allPhotoAssets: [PHAsset] = []
     @Published var blurryCount: Int = 0
-
+    @Published var allAssets: [PHAsset] = []
+    
+    func fetchAllAssets() {
+        let options = PHFetchOptions()
+        // Sort by creation date by default at the hardware level
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        
+        let fetchResult = PHAsset.fetchAssets(with: options)
+        var temp: [PHAsset] = []
+        fetchResult.enumerateObjects { (asset, _, _) in
+            temp.append(asset)
+        }
+        
+        DispatchQueue.main.async {
+            self.allAssets = temp
+        }
+    }
+    
     func fetchAllPhotos() {
        var assets: [PHAsset] = []
       
