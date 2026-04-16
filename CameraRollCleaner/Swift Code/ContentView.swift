@@ -141,13 +141,14 @@ struct ContentView: View {
     // 1. Keep this outside so it's accessible to the whole view
     struct PhotoAnnotation: Identifiable {
         let id = UUID()
-        let asset: PHAsset
+        let assets: [PHAsset] // This now holds the whole cluster
         let coordinate: CLLocationCoordinate2D
-        let count: Int // Add this to track how many photos are here
+        var count: Int { assets.count }
     }
     
     struct MapSweeperView: View {
         @ObservedObject var photoManager: PhotoManager
+        // Default to 10 years to capture everything
         @State private var startDate = Calendar.current.date(byAdding: .year, value: -10, to: Date()) ?? Date()
         @State private var endDate = Date()
         
@@ -156,88 +157,9 @@ struct ContentView: View {
             span: MKCoordinateSpan(latitudeDelta: 120, longitudeDelta: 120)
         )
         
-        // Helper struct for Hashable coordinates
         struct LocationKey: Hashable {
             let latitude: Double
             let longitude: Double
-        }
-        
-        struct LocationGroupView: View {
-            let assets: [PHAsset]
-            @ObservedObject var photoManager: PhotoManager
-            @StateObject var selectionManager = SelectionManager()
-            @State private var dragLocation: CGPoint = .zero
-            
-            let columns = [
-                GridItem(.flexible(), spacing: 2),
-                GridItem(.flexible(), spacing: 2),
-                GridItem(.flexible(), spacing: 2)
-            ]
-            
-            var formattedSize: String {
-                let selected = assets.filter { selectionManager.selectedAssetIDs.contains($0.localIdentifier) }
-                return ByteCountFormatter.string(fromByteCount: selectionManager.calculateTotalSize(assets: selected), countStyle: .file)
-            }
-
-            var body: some View {
-                VStack(spacing: 0) {
-                    ScrollView {
-                        LazyVGrid(columns: columns, spacing: 2) {
-                            ForEach(assets, id: \.localIdentifier) { asset in
-                                NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
-                                    PhotoThumbnail(asset: asset)
-                                        .cornerRadius(4)
-                                }
-                                .buttonStyle(.plain)
-                                .background(
-                                    GeometryReader { geo in
-                                        Color.clear.onChange(of: dragLocation) { _, newLoc in
-                                            if geo.frame(in: .global).contains(newLoc) {
-                                                selectionManager.dragSelect(id: asset.localIdentifier)
-                                            }
-                                        }
-                                    }
-                                )
-                                .overlay(alignment: .topTrailing) {
-                                    SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
-                                }
-                            }
-                        }
-                        .padding(.top, 2)
-                    }
-                    .gesture(
-                        DragGesture(minimumDistance: 15)
-                            .onChanged { dragLocation = $0.location }
-                            .onEnded { _ in dragLocation = .zero }
-                    )
-
-                    if !selectionManager.selectedAssetIDs.isEmpty {
-                        VStack(spacing: 15) {
-                            HStack(spacing: 15) {
-                                Button(action: {
-                                    for id in selectionManager.selectedAssetIDs { photoManager.toggleProtection(id: id) }
-                                    selectionManager.deselectAll()
-                                }) {
-                                    VStack { Image(systemName: "shield.fill"); Text("Keep").font(.caption).bold() }
-                                        .frame(maxWidth: .infinity).padding().background(Color.green).foregroundColor(.white).cornerRadius(12)
-                                }
-                                
-                                Button(action: {
-                                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
-                                        selectionManager.deselectAll()
-                                    }
-                                }) {
-                                    VStack { Image(systemName: "trash.fill"); Text("Delete").font(.caption).bold() }
-                                        .frame(maxWidth: .infinity).padding().background(Color.red).foregroundColor(.white).cornerRadius(12)
-                                }
-                            }
-                            Text("Selected items: \(formattedSize)").font(.caption2).foregroundColor(.secondary)
-                        }
-                        .padding().background(Color(UIColor.systemBackground)).shadow(radius: 10)
-                    }
-                }
-                .navigationTitle("Photos at Location")
-            }
         }
         
         var annotations: [PhotoAnnotation] {
@@ -246,8 +168,7 @@ struct ContentView: View {
                 return date >= startDate && date <= endDate
             }
             
-            // Dictionary stores: LocationKey -> (The most recent Asset, The total Count)
-            var clusterData: [LocationKey: (asset: PHAsset, count: Int)] = [:]
+            var clusterData: [LocationKey: [PHAsset]] = [:]
             
             for asset in filtered {
                 if let loc = asset.location {
@@ -255,107 +176,69 @@ struct ContentView: View {
                     let roundedLon = (loc.coordinate.longitude * 1000).rounded() / 1000
                     let key = LocationKey(latitude: roundedLat, longitude: roundedLon)
                     
-                    if let existing = clusterData[key] {
-                        // Increment the count for this location
-                        clusterData[key] = (existing.asset, existing.count + 1)
-                    } else {
-                        // First photo found for this spot
-                        clusterData[key] = (asset, 1)
-                    }
+                    clusterData[key, default: []].append(asset)
                 }
             }
             
-            return clusterData.map { key, value in
+            return clusterData.map { key, assets in
                 PhotoAnnotation(
-                    asset: value.asset,
-                    coordinate: CLLocationCoordinate2D(latitude: key.latitude, longitude: key.longitude),
-                    count: value.count
+                    assets: assets,
+                    coordinate: CLLocationCoordinate2D(latitude: key.latitude, longitude: key.longitude)
                 )
             }
         }
-        
-        // --- ONLY ONE BODY PROPERTY ---
+
         var body: some View {
             VStack(spacing: 0) {
                 // 1. DATE FILTER HEADER
                 HStack {
-                    DatePicker("", selection: $startDate, displayedComponents: .date)
-                        .labelsHidden()
+                    DatePicker("", selection: $startDate, displayedComponents: .date).labelsHidden()
                     Text("to")
-                    DatePicker("", selection: $endDate, displayedComponents: .date)
-                        .labelsHidden()
+                    DatePicker("", selection: $endDate, displayedComponents: .date).labelsHidden()
                 }
-                .padding()
-                .background(Color(UIColor.secondarySystemBackground))
-                
+                .padding().background(Color(UIColor.secondarySystemBackground))
+
                 // 2. THE INTERACTIVE MAP
                 Map(coordinateRegion: $region, annotationItems: annotations) { annotation in
                     MapAnnotation(coordinate: annotation.coordinate) {
-                        NavigationLink(destination: PhotoDetailView(asset: annotation.asset, photoManager: photoManager, selectionManager: SelectionManager())) {
+                        // This now leads to the Group View instead of just one photo
+                        NavigationLink(destination: LocationGroupView(assets: annotation.assets, photoManager: photoManager)) {
                             ZStack(alignment: .topTrailing) {
                                 VStack(spacing: 4) {
-                                    PhotoThumbnail(asset: annotation.asset)
-                                        .frame(width: 45, height: 45) // Slightly larger for better visibility
+                                    PhotoThumbnail(asset: annotation.assets.first!)
+                                        .frame(width: 45, height: 45)
                                         .clipShape(Circle())
                                         .overlay(Circle().stroke(Color.white, lineWidth: 2))
                                         .shadow(radius: 3)
                                     
-                                    Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: annotation.asset), countStyle: .file))
+                                    let totalSize = annotation.assets.reduce(0) { $0 + photoManager.getSize(for: $1) }
+                                    Text(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))
                                         .font(.system(size: 8, weight: .bold))
-                                        .padding(2)
-                                        .background(Color.black.opacity(0.6))
-                                        .foregroundColor(.white)
-                                        .cornerRadius(4)
+                                        .padding(2).background(Color.black.opacity(0.6))
+                                        .foregroundColor(.white).cornerRadius(4)
                                 }
                                 
-                                // --- THE MULTIPLE PHOTOS INDICATOR ---
                                 if annotation.count > 1 {
                                     Text("\(annotation.count)")
                                         .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .padding(5)
-                                        .background(Color.blue)
-                                        .clipShape(Circle())
-                                        .offset(x: 5, y: -5) // Position it on the top right of the thumbnail
-                                        .shadow(radius: 2)
+                                        .foregroundColor(.white).padding(5)
+                                        .background(Color.blue).clipShape(Circle())
+                                        .offset(x: 5, y: -5)
                                 }
                             }
                         }
                     }
                 }
-                // 3. ZOOM OVERLAY (Attached to the Map)
                 .overlay(alignment: .bottomTrailing) {
+                    // ZOOM CONTROLS
                     VStack(spacing: 12) {
-                        Button(action: {
-                            withAnimation(.easeInOut) {
-                                region.span.latitudeDelta /= 4
-                                region.span.longitudeDelta /= 4
-                            }
-                        }) {
-                            Image(systemName: "plus.magnifyingglass")
-                                .font(.title2.bold())
-                                .padding()
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                                .shadow(radius: 4)
+                        Button(action: { withAnimation { region.span.latitudeDelta /= 4; region.span.longitudeDelta /= 4 } }) {
+                            Image(systemName: "plus.magnifyingglass").padding().background(.ultraThinMaterial).clipShape(Circle())
                         }
-                        
-                        Button(action: {
-                            withAnimation(.easeInOut) {
-                                region.span.latitudeDelta = min(region.span.latitudeDelta * 4, 120)
-                                region.span.longitudeDelta = min(region.span.longitudeDelta * 4, 120)
-                            }
-                        }) {
-                            Image(systemName: "minus.magnifyingglass")
-                                .font(.title2.bold())
-                                .padding()
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                                .shadow(radius: 4)
+                        Button(action: { withAnimation { region.span.latitudeDelta = min(region.span.latitudeDelta * 4, 120); region.span.longitudeDelta = min(region.span.longitudeDelta * 4, 120) } }) {
+                            Image(systemName: "minus.magnifyingglass").padding().background(.ultraThinMaterial).clipShape(Circle())
                         }
-                    }
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 32)
+                    }.padding().padding(.bottom, 20)
                 }
             }
             .navigationTitle("Map Sweeper")
@@ -1194,3 +1077,193 @@ struct ContentView: View {
         }
     }
 }
+struct LocationGroupView: View {
+    let assets: [PHAsset]
+    @ObservedObject var photoManager: PhotoManager
+    @StateObject var selectionManager = SelectionManager()
+    @State private var dragLocation: CGPoint = .zero
+    
+    let columns = [
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2),
+        GridItem(.flexible(), spacing: 2)
+    ]
+    
+    // Calculate size of currently selected photos in this group
+    var formattedSelectionSize: String {
+        let selected = assets.filter { selectionManager.selectedAssetIDs.contains($0.localIdentifier) }
+        let bytes = selectionManager.calculateTotalSize(assets: selected)
+        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 2) {
+                    ForEach(assets, id: \.localIdentifier) { asset in
+                        NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
+                            PhotoThumbnail(asset: asset)
+                                .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.onChange(of: dragLocation) { _, newLoc in
+                                    if geo.frame(in: .global).contains(newLoc) {
+                                        selectionManager.dragSelect(id: asset.localIdentifier)
+                                    }
+                                }
+                            }
+                        )
+                        .overlay(alignment: .topTrailing) {
+                            SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
+                        }
+                    }
+                }
+                .padding(.top, 2)
+            }
+            .gesture(
+                DragGesture(minimumDistance: 15)
+                    .onChanged { dragLocation = $0.location }
+                    .onEnded { _ in dragLocation = .zero }
+            )
+
+            // --- THE SHARED ACTION BAR ---
+            if !selectionManager.selectedAssetIDs.isEmpty {
+                VStack(spacing: 12) {
+                    HStack(spacing: 15) {
+                        Button(action: {
+                            for id in selectionManager.selectedAssetIDs { photoManager.toggleProtection(id: id) }
+                            selectionManager.deselectAll()
+                        }) {
+                            VStack {
+                                Image(systemName: "shield.fill")
+                                Text("Keep").font(.caption).bold()
+                            }
+                            .frame(maxWidth: .infinity).padding().background(Color.green).foregroundColor(.white).cornerRadius(12)
+                        }
+                        
+                        Button(action: {
+                            photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                                if success { selectionManager.deselectAll() }
+                            }
+                        }) {
+                            VStack {
+                                Image(systemName: "trash.fill")
+                                Text("Delete").font(.caption).bold()
+                            }
+                            .frame(maxWidth: .infinity).padding().background(Color.red).foregroundColor(.white).cornerRadius(12)
+                        }
+                    }
+                    Text("You will save \(Text(formattedSelectionSize).bold()) of space.")
+                        .font(.caption2).foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color(UIColor.systemBackground))
+                .shadow(color: .black.opacity(0.1), radius: 10, y: -5)
+            }
+        }
+        .navigationTitle("Location Photos")
+    }
+}
+// MARK: - Missing Thumbnail View
+struct PhotoThumbnail: View {
+    let asset: PHAsset
+    @State private var image: UIImage? = nil
+    
+    var body: some View {
+        GeometryReader { geometry in
+            Group {
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geometry.size.width, height: geometry.size.width)
+                        .clipped()
+                } else {
+                    Color.gray.opacity(0.2)
+                }
+            }
+        }
+        .aspectRatio(1, contentMode: .fit)
+        .onAppear {
+            PHImageManager.default().requestImage(
+                for: asset,
+                targetSize: CGSize(width: 300, height: 300),
+                contentMode: .aspectFill,
+                options: nil
+            ) { img, _ in self.image = img }
+        }
+    }
+}
+
+// MARK: - Missing Detail View
+struct PhotoDetailView: View {
+    let asset: PHAsset
+    let photoManager: PhotoManager
+    @ObservedObject var selectionManager: SelectionManager
+    @Environment(\.dismiss) var dismiss
+    @State private var fullImage: UIImage? = nil
+    var isFromVault: Bool = false
+
+    var body: some View {
+        VStack(spacing: 20) {
+            // Image Display
+            ZStack {
+                if let img = fullImage {
+                    Image(uiImage: img)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .padding()
+                } else {
+                    ProgressView()
+                }
+            }
+            
+            // Metadata & Actions
+            VStack(spacing: 15) {
+                VStack(spacing: 4) {
+                    Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown Date")
+                        .font(.headline)
+                    Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
+                        .font(.subheadline).foregroundColor(.secondary)
+                }
+                
+                if !isFromVault {
+                    Button(action: {
+                        photoManager.toggleProtection(id: asset.localIdentifier)
+                        dismiss()
+                    }) {
+                        Label("Do Not Delete", systemImage: "shield.fill")
+                            .font(.headline).foregroundColor(.white)
+                            .padding().frame(maxWidth: .infinity)
+                            .background(Color.green).cornerRadius(10)
+                    }
+                }
+                
+                Button(action: {
+                    selectionManager.toggleSelection(id: asset.localIdentifier)
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                }) {
+                    let isSelected = selectionManager.selectedAssetIDs.contains(asset.localIdentifier)
+                    Label(isSelected ? "Selected for Deletion" : "Mark for Deletion",
+                          systemImage: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.headline).foregroundColor(.white)
+                        .padding().frame(maxWidth: .infinity)
+                        .background(isSelected ? Color.red : Color.gray)
+                        .cornerRadius(10)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 30)
+        }
+        .onAppear { loadFullImage() }
+    }
+
+    func loadFullImage() {
+        PHImageManager.default().requestImage(for: asset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: nil) { img, _ in
+            self.fullImage = img
+        }
+    }
+}
+
