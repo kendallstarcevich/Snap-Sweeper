@@ -151,11 +151,28 @@ struct ContentView: View {
         // Default to 10 years to capture everything
         @State private var startDate = Calendar.current.date(byAdding: .year, value: -10, to: Date()) ?? Date()
         @State private var endDate = Date()
-        
+        @State private var searchText = ""
         @State private var region = MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 37.0902, longitude: -95.7129),
             span: MKCoordinateSpan(latitudeDelta: 120, longitudeDelta: 120)
         )
+        func performSearch(query: String) {
+            let request = MKLocalSearch.Request()
+            request.naturalLanguageQuery = query
+            request.region = region // Prioritizes results near current view
+
+            let search = MKLocalSearch(request: request)
+            search.start { response, error in
+                guard let item = response?.mapItems.first else { return }
+                
+                withAnimation(.easeInOut) {
+                    region = MKCoordinateRegion(
+                        center: item.placemark.coordinate,
+                        span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5) // Zoom in on result
+                    )
+                }
+            }
+        }
         
         struct LocationKey: Hashable {
             let latitude: Double
@@ -190,13 +207,37 @@ struct ContentView: View {
 
         var body: some View {
             VStack(spacing: 0) {
+                
+                VStack(spacing: 10) {
+                            // New Search Bar
+                            HStack {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundColor(.secondary)
+                                TextField("Search for a location...", text: $searchText)
+                                    .textFieldStyle(.plain)
+                                    .onSubmit { performSearch(query: searchText) }
+                                
+                                if !searchText.isEmpty {
+                                    Button(action: { searchText = "" }) {
+                                        Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
+                                    }
+                                }
+                            }
+                            .padding(8)
+                            .background(Color(UIColor.tertiarySystemBackground))
+                            .cornerRadius(10)
+                    
                 // 1. DATE FILTER HEADER
-                HStack {
-                    DatePicker("", selection: $startDate, displayedComponents: .date).labelsHidden()
-                    Text("to")
-                    DatePicker("", selection: $endDate, displayedComponents: .date).labelsHidden()
-                }
-                .padding().background(Color(UIColor.secondarySystemBackground))
+                    HStack {
+                                    DatePicker("", selection: $startDate, displayedComponents: .date).labelsHidden()
+                                    Text("to").font(.caption).foregroundColor(.secondary)
+                                    DatePicker("", selection: $endDate, displayedComponents: .date).labelsHidden()
+                                    Spacer()
+                                    Text("\(annotations.count) spots").font(.caption).bold()
+                                }
+                            }
+                            .padding()
+                            .background(Color(UIColor.secondarySystemBackground))
 
                 // 2. THE INTERACTIVE MAP
                 Map(coordinateRegion: $region, annotationItems: annotations) { annotation in
