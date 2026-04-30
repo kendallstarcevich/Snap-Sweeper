@@ -81,18 +81,6 @@ struct BlurryPhotosView: View {
                         .padding(.horizontal, 16)
 
                         HStack {
-                            Button(action: {
-                                scanPhotos()
-                            }) {
-                                ContentView.HeaderPillLabel(
-                                    text: isScanning ? "Scanning..." : "Scan",
-                                    systemImage: "sparkles",
-                                    tint: theme.accentColor
-                                )
-                            }
-                            .disabled(isScanning)
-
-                            Spacer()
 
                             Button(action: {
                                 sortMostBlurryFirst.toggle()
