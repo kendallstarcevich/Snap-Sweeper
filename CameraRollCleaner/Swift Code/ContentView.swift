@@ -1,3 +1,4 @@
+
 import SwiftUI
 import Photos
 import Foundation
@@ -1322,8 +1323,10 @@ struct ContentView: View {
                         SummaryBar(label: "Permanently Delete \(selectionManager.selectedAssetIDs.count) Items", size: formattedSize) {
                             photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
                                 selectionManager.deselectAll()
+                                photoManager.fetchProtectedAssets()
                             }
                         }
+                        .padding()
                     }
                 }
             }
@@ -1515,158 +1518,233 @@ struct ContentView: View {
             photoManager.scanForDuplicates()
         }
     }
-
-
     
-    
+
+    // MARK: - Duplicate Group Detail View
     struct DuplicateGroupDetailView: View {
         let group: [PHAsset]
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
         @Environment(\.dismiss) var dismiss
-        
+
         var formattedSelectionSize: String {
-            let bytes = selectionManager.calculateTotalSize(assets: group.filter { selectionManager.selectedAssetIDs.contains($0.localIdentifier) })
+            let selectedAssets = group.filter {
+                selectionManager.selectedAssetIDs.contains($0.localIdentifier)
+            }
+            let bytes = selectionManager.calculateTotalSize(assets: selectedAssets)
             return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
         }
-        
+
         var body: some View {
-            VStack(spacing: 0) {
-                TabView {
-                    ForEach(group, id: \.localIdentifier) { asset in
-                        VStack {
-                            PhotoThumbnail(asset: asset)
-                                .aspectRatio(contentMode: .fit)
-                                .cornerRadius(12).padding()
-                                .contentShape(Rectangle())
-                            
-                            Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
-                                .font(.subheadline).bold().foregroundColor(.secondary)
-                            
-                            Button(action: { selectionManager.toggleSelection(id: asset.localIdentifier) }) {
-                                Label(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "Selected" : "Select to Delete",
-                                      systemImage: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle")
-                                .font(.headline).padding().frame(maxWidth: .infinity)
-                                .background(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? Color.red : Color.gray.opacity(0.2))
-                                .foregroundColor(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? .white : .primary)
-                                .cornerRadius(12)
-                            }.padding(.horizontal, 40).padding(.top, 10)
+            ZStack {
+                AppPalette.pageBackground
+                    .ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    TabView {
+                        ForEach(group, id: \.localIdentifier) { asset in
+                            VStack(spacing: 18) {
+                                Spacer()
+
+                                PhotoThumbnail(asset: asset)
+                                    .aspectRatio(contentMode: .fit)
+                                    .cornerRadius(16)
+                                    .padding(.horizontal)
+
+                                Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundColor(.secondary)
+
+                                Button(action: {
+                                    selectionManager.toggleSelection(id: asset.localIdentifier)
+                                }) {
+                                    Label(
+                                        selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "Selected" : "Select to Delete",
+                                        systemImage: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle"
+                                    )
+                                    .font(.headline)
+                                    .padding()
+                                    .frame(maxWidth: .infinity)
+                                    .background(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? ContentView.similarTheme.accentColor : Color.gray.opacity(0.18))
+                                    .foregroundColor(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? .white : AppPalette.titleColor)
+                                    .cornerRadius(14)
+                                }
+                                .padding(.horizontal, 40)
+
+                                Spacer()
+                            }
                         }
                     }
-                }.tabViewStyle(.page).indexViewStyle(.page(backgroundDisplayMode: .always))
-                
-                // THE ACTION BAR (Matching your Screenshot/Video UI)
-                if !selectionManager.selectedAssetIDs.isEmpty {
-                    VStack(spacing: 15) {
-                        HStack(spacing: 15) {
-                            // VAULT BUTTON
-                            Button(action: {
-                                for id in selectionManager.selectedAssetIDs { photoManager.toggleProtection(id: id) }
-                                photoManager.scanForDuplicates()
-                                dismiss()
-                            }) {
-                                VStack { Image(systemName: "shield.fill"); Text("Vault").font(.caption).bold() }
-                                    .frame(maxWidth: .infinity).padding().background(Color.green).foregroundColor(.white).cornerRadius(12)
-                            }
-                            
-                            // DELETE BUTTON
-                            Button(action: {
-                                photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
+                    .tabViewStyle(.page)
+                    .indexViewStyle(.page(backgroundDisplayMode: .always))
+
+                    if !selectionManager.selectedAssetIDs.isEmpty {
+                        VStack(spacing: 15) {
+                            HStack(spacing: 15) {
+                                Button(action: {
+                                    for id in selectionManager.selectedAssetIDs {
+                                        photoManager.toggleProtection(id: id)
+                                    }
                                     photoManager.scanForDuplicates()
                                     dismiss()
+                                }) {
+                                    VStack {
+                                        Image(systemName: "shield.fill")
+                                        Text("Vault")
+                                            .font(.caption)
+                                            .bold()
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(ContentView.similarTheme.accentColor)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(12)
                                 }
-                            }) {
-                                VStack { Image(systemName: "trash.fill"); Text("Delete").font(.caption).bold() }
-                                    .frame(maxWidth: .infinity).padding().background(Color.red).foregroundColor(.white).cornerRadius(12)
+
+                                Button(action: {
+                                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
+                                        photoManager.scanForDuplicates()
+                                        dismiss()
+                                    }
+                                }) {
+                                    VStack {
+                                        Image(systemName: "trash.fill")
+                                        Text("Delete")
+                                            .font(.caption)
+                                            .bold()
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(ContentView.similarTheme.accentColor)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(12)
+                                }
                             }
+
+                            Text("You will save \(Text(formattedSelectionSize).bold()) of space.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
                         }
-                        Text("You will save \(Text(formattedSelectionSize).bold()) of space.").font(.caption2).foregroundColor(.secondary)
+                        .padding()
+                        .background(Color.white)
+                        .shadow(color: ContentView.similarTheme.accentColor.opacity(0.12), radius: 10, y: -5)
                     }
-                    .padding().background(Color(UIColor.systemBackground)).shadow(radius: 10)
                 }
             }
-            .navigationTitle("Review Similar Photos")
+            .navigationTitle("Review Similar")
+            .navigationBarTitleDisplayMode(.inline)
             .onAppear {
-                // Suggest deleting all but the first (usually the 'best') photo
-                for i in 1..<group.count {
-                    selectionManager.selectedAssetIDs.insert(group[i].localIdentifier)
+                if group.count > 1 {
+                    for i in 1..<group.count {
+                        selectionManager.selectedAssetIDs.insert(group[i].localIdentifier)
+                    }
                 }
             }
         }
     }
+
     // MARK: - Core Supporting Views
     struct SelectionToggle: View {
         let id: String
         @ObservedObject var selectionManager: SelectionManager
+
         var body: some View {
             Image(systemName: selectionManager.selectedAssetIDs.contains(id) ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 22))
-                .foregroundStyle(selectionManager.selectedAssetIDs.contains(id) ? .blue : .white)
-                .shadow(radius: 3).padding(8).contentShape(Rectangle())
+                .foregroundStyle(selectionManager.selectedAssetIDs.contains(id) ? AppPalette.brightBlue : .white)
+                .shadow(radius: 3)
+                .padding(8)
+                .contentShape(Rectangle())
                 .onTapGesture {
                     selectionManager.toggleSelection(id: id)
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 }
         }
     }
-    
+
     struct VideoBadge: View {
         let asset: PHAsset
+
         var durationString: String {
             let formatter = DateComponentsFormatter()
-            formatter.allowedUnits = [.minute, .second]; formatter.unitsStyle = .positional; formatter.zeroFormattingBehavior = .pad
+            formatter.allowedUnits = [.minute, .second]
+            formatter.unitsStyle = .positional
+            formatter.zeroFormattingBehavior = .pad
             return formatter.string(from: asset.duration) ?? "0:00"
         }
+
         var body: some View {
             if asset.mediaType == .video {
-                Text(durationString).font(.caption2).bold().foregroundColor(.white).padding(4).background(Color.black.opacity(0.6)).cornerRadius(4).padding(4)
+                Text(durationString)
+                    .font(.caption2)
+                    .bold()
+                    .foregroundColor(.white)
+                    .padding(4)
+                    .background(Color.black.opacity(0.6))
+                    .cornerRadius(4)
+                    .padding(4)
             }
         }
     }
-    
+
     struct SummaryBar: View {
-        let label: String; let size: String; let action: () -> Void
+        let label: String
+        let size: String
+        let action: () -> Void
+
         var body: some View {
             VStack(spacing: 12) {
                 Button(action: action) {
-                    Text(label).bold().frame(maxWidth: .infinity).padding().background(Color.red).foregroundColor(.white).cornerRadius(12)
+                    Text(label)
+                        .bold()
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
                 }
-                Text("You will save \(Text(size).bold()) of space.").font(.caption2).foregroundColor(.secondary)
+
+                Text("You will save \(Text(size).bold()) of space.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
             }
-            .padding().background(Color(UIColor.systemBackground)).shadow(color: .black.opacity(0.1), radius: 10, y: -5)
+            .padding()
+            .background(Color.white)
+            .shadow(color: .black.opacity(0.1), radius: 10, y: -5)
         }
     }
-    
+
     struct VideoThumbnail: View {
         let asset: PHAsset
+
         var body: some View {
             ZStack(alignment: .bottomTrailing) {
                 PhotoThumbnail(asset: asset)
                     .contentShape(Rectangle())
+
+                VideoBadge(asset: asset)
             }
         }
     }
-    
+
     struct PhotoThumbnail: View {
         let asset: PHAsset
         @State private var image: UIImage? = nil
-        
+
         var body: some View {
-            // GeometryReader calculates the available width of the grid cell
             GeometryReader { geometry in
                 Group {
                     if let image = image {
                         Image(uiImage: image)
                             .resizable()
-                            .aspectRatio(contentMode: .fill) // Fills the entire square
-                            .frame(width: geometry.size.width, height: geometry.size.width) // Forces height to match width
-                            .clipped() // Cuts off the horizontal or vertical overlap
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: geometry.size.width, height: geometry.size.width)
+                            .clipped()
                     } else {
                         Color.gray.opacity(0.2)
                     }
                 }
             }
-            // This keeps the "box" square even before the image loads
             .aspectRatio(1, contentMode: .fit)
             .onAppear {
                 PHImageManager.default().requestImage(
@@ -1674,12 +1752,14 @@ struct ContentView: View {
                     targetSize: CGSize(width: 400, height: 400),
                     contentMode: .aspectFill,
                     options: nil
-                ) { img, _ in self.image = img }
+                ) { img, _ in
+                    self.image = img
+                }
             }
         }
     }
-    
-    
+
+    // MARK: - Manual Review View
     struct ManualReviewView: View {
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
@@ -1792,7 +1872,9 @@ struct ContentView: View {
                                             }
                                         }
                                     )
-                                    .overlay(alignment: .bottomTrailing) { VideoBadge(asset: asset) }
+                                    .overlay(alignment: .bottomTrailing) {
+                                        VideoBadge(asset: asset)
+                                    }
                                     .overlay(alignment: .topTrailing) {
                                         ContentView.SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
                                     }
@@ -1803,8 +1885,8 @@ struct ContentView: View {
                         }
                         .padding(.top, 12)
                     }
-                    .gesture(
-                        DragGesture(minimumDistance: 15)
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 15, coordinateSpace: .global)
                             .onChanged { dragLocation = $0.location }
                             .onEnded { _ in dragLocation = .zero }
                     )
@@ -1813,13 +1895,17 @@ struct ContentView: View {
                         VStack(spacing: 15) {
                             HStack(spacing: 15) {
                                 Button(action: {
-                                    for id in selectionManager.selectedAssetIDs { photoManager.toggleProtection(id: id) }
+                                    for id in selectionManager.selectedAssetIDs {
+                                        photoManager.toggleProtection(id: id)
+                                    }
                                     selectionManager.deselectAll()
                                     photoManager.fetchAllPhotos()
                                 }) {
                                     VStack {
                                         Image(systemName: "shield.fill")
-                                        Text("Keep").font(.caption).bold()
+                                        Text("Keep")
+                                            .font(.caption)
+                                            .bold()
                                     }
                                     .frame(maxWidth: .infinity)
                                     .padding()
@@ -1836,7 +1922,9 @@ struct ContentView: View {
                                 }) {
                                     VStack {
                                         Image(systemName: "trash.fill")
-                                        Text("Delete").font(.caption).bold()
+                                        Text("Delete")
+                                            .font(.caption)
+                                            .bold()
                                     }
                                     .frame(maxWidth: .infinity)
                                     .padding()
@@ -1859,13 +1947,13 @@ struct ContentView: View {
             .navigationBarBackButtonHidden(true)
             .navigationTitle("All Media")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear { photoManager.fetchAllPhotos() }
+            .onAppear {
+                photoManager.fetchAllPhotos()
+            }
         }
     }
 
-
-    
-    
+    // MARK: - Storage Gauge
     struct StorageGaugeView: View {
         let usedBytes: Int64
         let totalBytes: Int64
@@ -1955,20 +2043,44 @@ struct ContentView: View {
         }
     }
 
-
-
-    
     struct ActionCard: View {
-        let title: String; let count: Int; let icon: String; let color: Color
+        let title: String
+        let count: Int
+        let icon: String
+        let color: Color
+
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
-                HStack { Image(systemName: icon).font(.title2).foregroundColor(color); Spacer(); Image(systemName: "chevron.right").font(.caption).foregroundColor(.secondary) }
-                VStack(alignment: .leading, spacing: 4) { Text(title).font(.headline).foregroundColor(.primary); Text(count > 0 ? "\(count) items" : "Scan to start").font(.caption).foregroundColor(.secondary) }
+                HStack {
+                    Image(systemName: icon)
+                        .font(.title2)
+                        .foregroundColor(color)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+
+                    Text(count > 0 ? "\(count) items" : "Scan to start")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
-            .padding().frame(maxWidth: .infinity, alignment: .leading).background(Color(UIColor.secondarySystemBackground)).cornerRadius(15)
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(UIColor.secondarySystemBackground))
+            .cornerRadius(15)
         }
     }
-    
+
+    // MARK: - Protected Photos / Vault
     struct ProtectedPhotosView: View {
         @ObservedObject var photoManager: PhotoManager
         @Binding var selectedTab: Int
@@ -1978,7 +2090,9 @@ struct ContentView: View {
             Group {
                 if authManager.isUnlocked {
                     VaultResultsView(assets: photoManager.protectedAssets, photoManager: photoManager)
-                        .onAppear { photoManager.fetchProtectedAssets() }
+                        .onAppear {
+                            photoManager.fetchProtectedAssets()
+                        }
                         .toolbar {
                             ToolbarItem(placement: .navigationBarTrailing) {
                                 Button("Lock") {
@@ -2013,7 +2127,9 @@ struct ContentView: View {
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
 
-                            Button(action: { authManager.authenticate() }) {
+                            Button(action: {
+                                authManager.authenticate()
+                            }) {
                                 Label("Unlock Vault", systemImage: "faceid")
                                     .font(.headline)
                                     .padding()
@@ -2033,251 +2149,248 @@ struct ContentView: View {
         }
     }
 
-    
+    // MARK: - Photo Detail
     struct PhotoDetailView: View {
         let asset: PHAsset
         let photoManager: PhotoManager
-        @Environment(\.dismiss) var dismiss
         @ObservedObject var selectionManager: SelectionManager
-        @State private var fullImage: UIImage? = nil
         var isFromVault: Bool = false
+
+        @Environment(\.dismiss) var dismiss
+        @State private var fullImage: UIImage? = nil
         @State private var player: AVPlayer? = nil
         @State private var showVideoPlayer = false
-        
+
         var body: some View {
-            VStack(spacing: 20) {
-                ZStack {
-                    if let img = fullImage { Image(uiImage: img).resizable().aspectRatio(contentMode: .fit).padding() }
-                    else { ProgressView() }
-                    if asset.mediaType == .video {
-                        Button(action: prepareAndPlayVideo) {
-                            Image(systemName: "play.circle.fill").font(.system(size: 70)).foregroundColor(.white.opacity(0.8)).shadow(radius: 10)
+            ZStack {
+                AppPalette.pageBackground
+                    .ignoresSafeArea()
+
+                VStack(spacing: 20) {
+                    ZStack {
+                        if let img = fullImage {
+                            Image(uiImage: img)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .padding()
+                        } else {
+                            ProgressView()
+                        }
+
+                        if asset.mediaType == .video {
+                            Button(action: prepareAndPlayVideo) {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 70))
+                                    .foregroundColor(.white.opacity(0.85))
+                                    .shadow(radius: 10)
+                            }
                         }
                     }
-                }
-                .sheet(isPresented: $showVideoPlayer) {
-                    if let player = player { VideoPlayer(player: player).onAppear { player.play() } }
-                }
-                
-                VStack(spacing: 15) {
-                    VStack(spacing: 4) {
-                        Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown Date").font(.headline)
-                        Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file)).font(.subheadline).foregroundColor(.secondary)
-                    }
-                    if !isFromVault {
-                        Button(action: { photoManager.toggleProtection(id: asset.localIdentifier); dismiss() }) {
-                            Label("Do Not Delete", systemImage: "shield.fill").font(.headline).foregroundColor(.white).padding().frame(maxWidth: .infinity).background(Color.green).cornerRadius(10)
+                    .sheet(isPresented: $showVideoPlayer) {
+                        if let player = player {
+                            VideoPlayer(player: player)
+                                .onAppear {
+                                    player.play()
+                                }
                         }
                     }
-                    Button(action: {
-                        selectionManager.toggleSelection(id: asset.localIdentifier)
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    }) {
-                        Label(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "Selected for Deletion" : "Mark for Deletion", systemImage: selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? "checkmark.circle.fill" : "circle")
-                            .font(.headline).foregroundColor(.white).padding().frame(maxWidth: .infinity)
-                            .background(selectionManager.selectedAssetIDs.contains(asset.localIdentifier) ? Color.red : Color.gray).cornerRadius(10)
+
+                    VStack(spacing: 15) {
+                        VStack(spacing: 4) {
+                            Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown Date")
+                                .font(.headline)
+
+                            Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if !isFromVault {
+                            Button(action: {
+                                photoManager.toggleProtection(id: asset.localIdentifier)
+                                dismiss()
+                            }) {
+                                Label("Do Not Delete", systemImage: "shield.fill")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .padding()
+                                    .frame(maxWidth: .infinity)
+                                    .background(Color.green)
+                                    .cornerRadius(10)
+                            }
+                        }
+
+                        Button(action: {
+                            selectionManager.toggleSelection(id: asset.localIdentifier)
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        }) {
+                            let isSelected = selectionManager.selectedAssetIDs.contains(asset.localIdentifier)
+                            Label(
+                                isSelected ? "Selected for Deletion" : "Mark for Deletion",
+                                systemImage: isSelected ? "checkmark.circle.fill" : "circle"
+                            )
+                            .font(.headline)
+                            .foregroundColor(.white)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(isSelected ? Color.red : Color.gray)
+                            .cornerRadius(10)
+                        }
                     }
                     .padding(.horizontal)
+                    .padding(.bottom, 30)
                 }
-                .padding(.bottom, 30)
             }
-            .onAppear { loadFullImage() }
-        }
-        func loadFullImage() { PHImageManager.default().requestImage(for: asset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: nil) { img, _ in self.fullImage = img } }
-        func prepareAndPlayVideo() {
-            PHImageManager.default().requestAVAsset(forVideo: asset, options: nil) { avAsset, _, _ in
-                if let urlAsset = avAsset as? AVURLAsset { DispatchQueue.main.async { self.player = AVPlayer(url: urlAsset.url); self.showVideoPlayer = true } }
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                loadFullImage()
             }
         }
-    }
-}
-struct LocationGroupView: View {
-    let assets: [PHAsset]
-    @ObservedObject var photoManager: PhotoManager
-    @StateObject var selectionManager = SelectionManager()
-    @State private var dragLocation: CGPoint = .zero
-    
-    let columns = [
-        GridItem(.flexible(), spacing: 2),
-        GridItem(.flexible(), spacing: 2),
-        GridItem(.flexible(), spacing: 2)
-    ]
-    
-    // Calculate size of currently selected photos in this group
-    var formattedSelectionSize: String {
-        let selected = assets.filter { selectionManager.selectedAssetIDs.contains($0.localIdentifier) }
-        let bytes = selectionManager.calculateTotalSize(assets: selected)
-        return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
-    }
 
-    var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 2) {
-                    ForEach(assets, id: \.localIdentifier) { asset in
-                        NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
-                            PhotoThumbnail(asset: asset)
-                                .cornerRadius(4)
-                        }
-                        .buttonStyle(.plain)
-                        .background(
-                            GeometryReader { geo in
-                                Color.clear.onChange(of: dragLocation) { _, newLoc in
-                                    if geo.frame(in: .global).contains(newLoc) {
-                                        selectionManager.dragSelect(id: asset.localIdentifier)
-                                    }
-                                }
-                            }
-                        )
-                        .overlay(alignment: .topTrailing) {
-                            ContentView.SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
-                        }
-                    }
-                }
-                .padding(.top, 2)
-            }
-            .gesture(
-                DragGesture(minimumDistance: 15)
-                    .onChanged { dragLocation = $0.location }
-                    .onEnded { _ in dragLocation = .zero }
-            )
-
-            // --- THE SHARED ACTION BAR ---
-            if !selectionManager.selectedAssetIDs.isEmpty {
-                VStack(spacing: 12) {
-                    HStack(spacing: 15) {
-                        Button(action: {
-                            for id in selectionManager.selectedAssetIDs { photoManager.toggleProtection(id: id) }
-                            selectionManager.deselectAll()
-                        }) {
-                            VStack {
-                                Image(systemName: "shield.fill")
-                                Text("Keep").font(.caption).bold()
-                            }
-                            .frame(maxWidth: .infinity).padding().background(Color.green).foregroundColor(.white).cornerRadius(12)
-                        }
-                        
-                        Button(action: {
-                            photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
-                                if success { selectionManager.deselectAll() }
-                            }
-                        }) {
-                            VStack {
-                                Image(systemName: "trash.fill")
-                                Text("Delete").font(.caption).bold()
-                            }
-                            .frame(maxWidth: .infinity).padding().background(Color.red).foregroundColor(.white).cornerRadius(12)
-                        }
-                    }
-                    Text("You will save \(Text(formattedSelectionSize).bold()) of space.")
-                        .font(.caption2).foregroundColor(.secondary)
-                }
-                .padding()
-                .background(Color(UIColor.systemBackground))
-                .shadow(color: .black.opacity(0.1), radius: 10, y: -5)
-            }
-        }
-        .navigationTitle("Location Photos")
-    }
-}
-// MARK: - Missing Thumbnail View
-struct PhotoThumbnail: View {
-    let asset: PHAsset
-    @State private var image: UIImage? = nil
-    
-    var body: some View {
-        GeometryReader { geometry in
-            Group {
-                if let image = image {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geometry.size.width, height: geometry.size.width)
-                        .clipped()
-                } else {
-                    Color.gray.opacity(0.2)
-                }
-            }
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .onAppear {
+        func loadFullImage() {
             PHImageManager.default().requestImage(
                 for: asset,
-                targetSize: CGSize(width: 300, height: 300),
-                contentMode: .aspectFill,
+                targetSize: PHImageManagerMaximumSize,
+                contentMode: .aspectFit,
                 options: nil
-            ) { img, _ in self.image = img }
+            ) { img, _ in
+                self.fullImage = img
+            }
         }
-    }
-}
 
-// MARK: - Missing Detail View
-struct PhotoDetailView: View {
-    let asset: PHAsset
-    let photoManager: PhotoManager
-    @ObservedObject var selectionManager: SelectionManager
-    @Environment(\.dismiss) var dismiss
-    @State private var fullImage: UIImage? = nil
-    var isFromVault: Bool = false
+        func prepareAndPlayVideo() {
+            let options = PHVideoRequestOptions()
+            options.deliveryMode = .automatic
 
-    var body: some View {
-        VStack(spacing: 20) {
-            // Image Display
-            ZStack {
-                if let img = fullImage {
-                    Image(uiImage: img)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .padding()
-                } else {
-                    ProgressView()
+            PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
+                guard let avAsset = avAsset else { return }
+
+                DispatchQueue.main.async {
+                    self.player = AVPlayer(playerItem: AVPlayerItem(asset: avAsset))
+                    self.showVideoPlayer = true
                 }
             }
-            
-            // Metadata & Actions
-            VStack(spacing: 15) {
-                VStack(spacing: 4) {
-                    Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown Date")
-                        .font(.headline)
-                    Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
-                        .font(.subheadline).foregroundColor(.secondary)
-                }
-                
-                if !isFromVault {
-                    Button(action: {
-                        photoManager.toggleProtection(id: asset.localIdentifier)
-                        dismiss()
-                    }) {
-                        Label("Do Not Delete", systemImage: "shield.fill")
-                            .font(.headline).foregroundColor(.white)
-                            .padding().frame(maxWidth: .infinity)
-                            .background(Color.green).cornerRadius(10)
+        }
+    }
+
+    // MARK: - Location Group View
+    struct LocationGroupView: View {
+        let assets: [PHAsset]
+        @ObservedObject var photoManager: PhotoManager
+        @StateObject var selectionManager = SelectionManager()
+        @State private var dragLocation: CGPoint = .zero
+
+        let columns = [
+            GridItem(.flexible(), spacing: 4),
+            GridItem(.flexible(), spacing: 4),
+            GridItem(.flexible(), spacing: 4)
+        ]
+
+        var formattedSelectionSize: String {
+            let selectedAssets = assets.filter {
+                selectionManager.selectedAssetIDs.contains($0.localIdentifier)
+            }
+            let bytes = selectionManager.calculateTotalSize(assets: selectedAssets)
+            return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+        }
+
+        var body: some View {
+            ZStack {
+                AppPalette.pageBackground
+                    .ignoresSafeArea()
+
+                VStack(spacing: 0) {
+                    ScrollView(.vertical, showsIndicators: false) {
+                        LazyVGrid(columns: columns, spacing: 4) {
+                            ForEach(assets, id: \.localIdentifier) { asset in
+                                NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
+                                    PhotoThumbnail(asset: asset)
+                                        .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+                                .background(
+                                    GeometryReader { geo in
+                                        Color.clear.onChange(of: dragLocation) { _, newLoc in
+                                            if geo.frame(in: .global).contains(newLoc) {
+                                                selectionManager.dragSelect(id: asset.localIdentifier)
+                                            }
+                                        }
+                                    }
+                                )
+                                .overlay(alignment: .bottomTrailing) {
+                                    VideoBadge(asset: asset)
+                                }
+                                .overlay(alignment: .topTrailing) {
+                                    ContentView.SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.top, 12)
+                        .padding(.bottom, selectionManager.selectedAssetIDs.isEmpty ? 30 : 140)
+                    }
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 15, coordinateSpace: .global)
+                            .onChanged { dragLocation = $0.location }
+                            .onEnded { _ in dragLocation = .zero }
+                    )
+
+                    if !selectionManager.selectedAssetIDs.isEmpty {
+                        VStack(spacing: 12) {
+                            HStack(spacing: 15) {
+                                Button(action: {
+                                    for id in selectionManager.selectedAssetIDs {
+                                        photoManager.toggleProtection(id: id)
+                                    }
+                                    selectionManager.deselectAll()
+                                }) {
+                                    VStack {
+                                        Image(systemName: "shield.fill")
+                                        Text("Keep")
+                                            .font(.caption)
+                                            .bold()
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(ContentView.mapTheme.accentColor)
+                                    .foregroundColor(AppPalette.titleColor)
+                                    .cornerRadius(12)
+                                }
+
+                                Button(action: {
+                                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                                        if success {
+                                            selectionManager.deselectAll()
+                                        }
+                                    }
+                                }) {
+                                    VStack {
+                                        Image(systemName: "trash.fill")
+                                        Text("Delete")
+                                            .font(.caption)
+                                            .bold()
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(ContentView.mapTheme.accentColor)
+                                    .foregroundColor(AppPalette.titleColor)
+                                    .cornerRadius(12)
+                                }
+                            }
+
+                            Text("You will save \(Text(formattedSelectionSize).bold()) of space.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .padding()
+                        .background(Color.white)
+                        .shadow(color: ContentView.mapTheme.accentColor.opacity(0.12), radius: 10, y: -5)
                     }
                 }
-                
-                Button(action: {
-                    selectionManager.toggleSelection(id: asset.localIdentifier)
-                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                }) {
-                    let isSelected = selectionManager.selectedAssetIDs.contains(asset.localIdentifier)
-                    Label(isSelected ? "Selected for Deletion" : "Mark for Deletion",
-                          systemImage: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(.headline).foregroundColor(.white)
-                        .padding().frame(maxWidth: .infinity)
-                        .background(isSelected ? Color.red : Color.gray)
-                        .cornerRadius(10)
-                }
             }
-            .padding(.horizontal)
-            .padding(.bottom, 30)
-        }
-        .onAppear { loadFullImage() }
-    }
-
-    func loadFullImage() {
-        PHImageManager.default().requestImage(for: asset, targetSize: PHImageManagerMaximumSize, contentMode: .aspectFit, options: nil) { img, _ in
-            self.fullImage = img
+            .navigationTitle("Location Photos")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
-

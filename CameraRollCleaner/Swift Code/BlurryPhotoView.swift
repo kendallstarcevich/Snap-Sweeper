@@ -1,3 +1,4 @@
+
 import SwiftUI
 import Photos
 
@@ -300,7 +301,6 @@ struct BlurryPhotosView: View {
         isScanning = false
     }
 }
-
 
 // MARK: - Full Image Pager View
 struct BlurryPhotoPagerView: View {
