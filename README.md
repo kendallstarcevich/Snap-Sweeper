@@ -30,11 +30,7 @@ Testing photo-heavy apps in the Xcode Simulator can be tricky because the defaul
 
 ### 2. Setup the Simulator Library
 To test **Similarity** and **Map Sweeper**, you need more than the default photos:
-1.  **Drag & Drop:** Drag a folder of images from your Mac directly onto the Simulator window.
-2.  **Add Metadata:** Since simulator photos often lack GPS data:
-    * Go to **Features > Location** in the Simulator menu.
-    * Select **City Run** or **Freeway Drive** to simulate movement.
-    * Open the native "Photos" app in the simulator to ensure the images are indexed before opening Snap Sweep.
+   *  **Drag & Drop:** Drag a folder of images from your Mac directly onto the Simulator window.
 
 ### 3. Run the Project
 1.  Clone the repository: `git clone https://github.com/kendallstarcevich/SnapSweep.git`
@@ -42,13 +38,6 @@ To test **Similarity** and **Map Sweeper**, you need more than the default photo
 3.  Select a simulator (e.g., iPhone 15 Pro).
 4.  Press `Cmd + R` to build and run.
 5.  **Permission:** Accept the "Photos Library" access prompt on the first launch.
-
-### 4. Testing Intensive Scans
-Because we implemented **Batch Scanning**:
-* Navigate to **Similarity Score**.
-* Select a **Scan Range** (e.g., "Newest 500" or a specific year).
-* Tap **Scan Now**.
-* *Note:* In the simulator, the first scan may take a moment to initialize the Photos database.
 
 ---
 
