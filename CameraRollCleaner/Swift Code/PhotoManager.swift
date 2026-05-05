@@ -15,6 +15,8 @@ class PhotoManager: ObservableObject {
     @Published var blurryCount: Int = 0
     @Published var allAssets: [PHAsset] = []
     @Published var localizedAssets: [PHAsset] = []
+    @Published var blurryResults: [BlurryResult] = []
+    @Published var hasScannedBlurry = false
     
     func fetchAllAssets() {
         let options = PHFetchOptions()
@@ -52,19 +54,19 @@ class PhotoManager: ObservableObject {
     }
     
     func fetchAllPhotos() {
-       var assets: [PHAsset] = []
-      
-       let options = PHFetchOptions()
-       options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-      
-       let result = PHAsset.fetchAssets(with: .image, options: options)
-       result.enumerateObjects { asset, _, _ in
-           assets.append(asset)
-       }
-      
-       DispatchQueue.main.async {
-           self.allPhotoAssets = assets
-       }
+        var assets: [PHAsset] = []
+        
+        let options = PHFetchOptions()
+        options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+        
+        let result = PHAsset.fetchAssets(with: .image, options: options)
+        result.enumerateObjects { asset, _, _ in
+            assets.append(asset)
+        }
+        
+        DispatchQueue.main.async {
+            self.allPhotoAssets = assets
+        }
     }
     
     @Published var totalBytesDeleted: Int64 = UserDefaults.standard.value(forKey: "bytesDeleted") as? Int64 ?? 0
@@ -73,13 +75,13 @@ class PhotoManager: ObservableObject {
         let saved = UserDefaults.standard.stringArray(forKey: "protectedAssets") ?? []
         return Set(saved)
     }()
-
+    
     enum SortStrategy: String, CaseIterable {
         case newest = "Newest First"
         case oldest = "Oldest First"
         case largest = "Largest Size"
     }
-
+    
     func sortVault(by strategy: SortStrategy) {
         switch strategy {
         case .oldest:
@@ -119,12 +121,12 @@ class PhotoManager: ObservableObject {
         }
         self.protectedAssets = temp
     }
-
+    
     func getSize(for asset: PHAsset) -> Int64 {
         let resources = PHAssetResource.assetResources(for: asset)
         return resources.first?.value(forKey: "fileSize") as? Int64 ?? 0
     }
-
+    
     func sortAssets(by strategy: SortStrategy) {
         switch strategy {
         case .oldest:
@@ -135,7 +137,7 @@ class PhotoManager: ObservableObject {
             screenshotAssets.sort { ($0.creationDate ?? Date()) > ($1.creationDate ?? Date()) }
         }
     }
-
+    
     func requestAccessAndFetch() {
         PHPhotoLibrary.requestAuthorization { status in
             if status == .authorized {
@@ -158,10 +160,10 @@ class PhotoManager: ObservableObject {
     }
     
     // Inside PhotoManager class:
-
+    
     // Stores the threshold in seconds (default to 120s / 2 minutes)
     @AppStorage("videoThreshold") var videoThreshold: Double = 120
-
+    
     func fetchVideos() {
         let videoOptions = PHFetchOptions()
         
@@ -181,7 +183,7 @@ class PhotoManager: ObservableObject {
         self.videoAssets = tempVideos
         self.videoCount = tempVideos.count
     }
-
+    
     func sortVideos(by strategy: SortStrategy) {
         switch strategy {
         case .largest:
@@ -207,7 +209,7 @@ class PhotoManager: ObservableObject {
             let sorted = allAssets.sorted { ($0.creationDate ?? Date()) < ($1.creationDate ?? Date()) }
             
             let dispatchGroup = DispatchGroup()
-
+            
             for i in 0..<sorted.count {
                 let rootAsset = sorted[i]
                 if processedIDs.contains(rootAsset.localIdentifier) { continue }
@@ -249,6 +251,49 @@ class PhotoManager: ObservableObject {
             }
         }
     }
+    
+    func scanForBlurryPhotos(using blurManager: BlurModelManager) {
+        
+        guard !hasScannedBlurry else { return }
+        
+        DispatchQueue.global(qos: .userInitiated).async {
+            
+            var scannedResults: [BlurryResult] = []
+            let imageManager = PHCachingImageManager()
+            
+            let requestOptions = PHImageRequestOptions()
+            requestOptions.isSynchronous = true
+            requestOptions.deliveryMode = .highQualityFormat
+            requestOptions.resizeMode = .exact
+            
+            for asset in self.allPhotoAssets {
+                let targetSize = CGSize(width: 224, height: 224)
+                
+                imageManager.requestImage(
+                    for: asset,
+                    targetSize: targetSize,
+                    contentMode: .aspectFill,
+                    options: requestOptions
+                ) { image, _ in
+                    
+                    guard let image = image,
+                          let score = blurManager.predictBlurScore(from: image) else { return }
+                    
+                    scannedResults.append(
+                        BlurryResult(asset: asset, score: score, image: image)
+                    )
+                }
+            }
+            
+            DispatchQueue.main.async {
+                self.blurryResults = scannedResults.sorted { $0.score > $1.score }
+                self.blurryCount = scannedResults.filter { $0.score >= 0.75 }.count
+                self.hasScannedBlurry = true
+            }
+        }
+    }
+
+
     
     func fetchMetadata() {
         let allPhotos = PHAsset.fetchAssets(with: .image, options: nil)
