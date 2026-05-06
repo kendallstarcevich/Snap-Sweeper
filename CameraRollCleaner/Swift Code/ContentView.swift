@@ -64,7 +64,7 @@ struct CleanupTheme {
 struct ContentView: View {
     @StateObject var photoManager = PhotoManager()
     @State private var selectedTab = 0
-
+    
     var body: some View {
         TabView(selection: $selectedTab) {
             HomeDashboardView(photoManager: photoManager)
@@ -73,14 +73,14 @@ struct ContentView: View {
                     Text("Home")
                 }
                 .tag(0)
-
+            
             CleanHubView(photoManager: photoManager, selectedTab: $selectedTab)
                 .tabItem {
                     Image(systemName: "sparkles.rectangle.stack.fill")
                     Text("Clean")
                 }
                 .tag(1)
-
+            
             NavigationStack {
                 ProtectedPhotosView(photoManager: photoManager, selectedTab: $selectedTab)
             }
@@ -99,7 +99,7 @@ struct ContentView: View {
             }
         }
     }
-
+    
     // MARK: - Home Card Model
     struct HomeCategoryCard: Identifiable {
         let id = UUID()
@@ -112,7 +112,7 @@ struct ContentView: View {
         let buttonTextColor: Color
         let destination: AnyView
     }
-
+    
     // MARK: - Shared Themes
     static var screenshotTheme: CleanupTheme {
         CleanupTheme(
@@ -124,7 +124,7 @@ struct ContentView: View {
             icon: "iphone"
         )
     }
-
+    
     static var blurryTheme: CleanupTheme {
         CleanupTheme(
             accentColor: AppPalette.darkLemon,
@@ -135,7 +135,7 @@ struct ContentView: View {
             icon: "sparkles.tv"
         )
     }
-
+    
     static var similarTheme: CleanupTheme {
         CleanupTheme(
             accentColor: AppPalette.softPink,
@@ -146,7 +146,7 @@ struct ContentView: View {
             icon: "square.on.square"
         )
     }
-
+    
     static var videoTheme: CleanupTheme {
         CleanupTheme(
             accentColor: AppPalette.lightVideoBlue,
@@ -157,7 +157,7 @@ struct ContentView: View {
             icon: "video.fill"
         )
     }
-
+    
     static var mapTheme: CleanupTheme {
         CleanupTheme(
             accentColor: AppPalette.softMap,
@@ -168,7 +168,7 @@ struct ContentView: View {
             icon: "map.fill"
         )
     }
-
+    
     static var manualTheme: CleanupTheme {
         CleanupTheme(
             accentColor: AppPalette.brightBlue,
@@ -179,7 +179,7 @@ struct ContentView: View {
             icon: "slider.horizontal.3"
         )
     }
-
+    
     static var vaultTheme: CleanupTheme {
         CleanupTheme(
             accentColor: AppPalette.softGreen,
@@ -190,17 +190,18 @@ struct ContentView: View {
             icon: "lock.shield"
         )
     }
-
+    
     // MARK: - Home Dashboard
     struct HomeDashboardView: View {
         @ObservedObject var photoManager: PhotoManager
         @State private var storageInfo = StorageManager.getStorageInfo()
-
+        @State private var showInstructions = false
+        @AppStorage("hasSeenInstructions") var hasSeenInstructions = false
+        
         let columns = [
             GridItem(.flexible(), spacing: 18),
             GridItem(.flexible(), spacing: 18)
         ]
-
         var homeCleanupCards: [HomeCategoryCard] {
             [
                 HomeCategoryCard(
@@ -211,7 +212,8 @@ struct ContentView: View {
                     count: photoManager.screenshotCount,
                     accentColor: ContentView.screenshotTheme.accentColor,
                     buttonTextColor: ContentView.screenshotTheme.buttonTextColor,
-                    destination: AnyView(ResultsView(assets: photoManager.screenshotAssets, photoManager: photoManager))
+                    destination: AnyView(ResultsView(assets:
+                                                        photoManager.screenshotAssets, photoManager: photoManager))
                 ),
                 HomeCategoryCard(
                     icon: ContentView.blurryTheme.icon,
@@ -255,73 +257,107 @@ struct ContentView: View {
                 )
             ]
         }
-
+        
         var topTwoCleanupCards: [HomeCategoryCard] {
             Array(homeCleanupCards.sorted { $0.count > $1.count }.prefix(2))
         }
-
+        
         var storageTrackerCards: [HomeCategoryCard] {
             homeCleanupCards.sorted { $0.count > $1.count }
         }
-
+        
         func refreshAll() {
             photoManager.requestAccessAndFetch()
             photoManager.fetchAllPhotos()
             photoManager.fetchVideos()
-            photoManager.fetchAllPhotos()
             photoManager.fetchProtectedAssets()
             photoManager.scanForDuplicates()
             storageInfo = StorageManager.getStorageInfo()
+            photoManager.hasScannedBlurry = false
+            photoManager.scanForBlurryPhotos(using: BlurModelManager())
         }
-
+        
         var body: some View {
             NavigationStack {
                 ZStack {
                     AppPalette.pageBackground
                         .ignoresSafeArea()
-
+                    
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 22) {
                             HStack(alignment: .center) {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("SNAP SWEEP")
+                                    Text("SNAP SWEEPER")
                                         .font(.system(size: 30, weight: .bold, design: .rounded))
                                         .foregroundColor(AppPalette.titleColor)
-
+                                    
                                     Text("Less mess. More memories.")
                                         .font(.subheadline)
                                         .foregroundColor(.secondary)
                                 }
-
+                                
                                 Spacer()
-
-                                Button(action: refreshAll) {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.system(size: 18, weight: .semibold))
-                                        .foregroundColor(AppPalette.brightBlue)
-                                        .frame(width: 44, height: 44)
-                                        .background(Color.white)
-                                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                                        .shadow(color: AppPalette.brightBlue.opacity(0.12), radius: 8, y: 4)
-                                }
+                                
+                                HStack(spacing: 10) {
+                                    Button {
+                                        showInstructions = true
+                                    } label: {
+                                        Image(systemName: "questionmark.circle")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundColor(AppPalette.darkLemon)
+                                            .frame(width: 44, height: 44)
+                                            .background(Color.white)
+                                            .clipShape(
+                                                RoundedRectangle(
+                                                    cornerRadius: 14,
+                                                    style: .continuous
+                                                )
+                                            )
+                                            .shadow(
+                                                color: AppPalette.darkLemon.opacity(0.12),
+                                                radius: 8,
+                                                y: 4
+                                            )
+                                    }
+                                    
+                                    Button(action: refreshAll){
+                                        Image(systemName: "arrow.clockwise")
+                                            .font(.system(size: 18, weight: .semibold))
+                                            .foregroundColor(AppPalette.brightBlue)
+                                            .frame(width: 44, height: 44)
+                                            .background(Color.white)
+                                            .clipShape(
+                                                RoundedRectangle(
+                                                    cornerRadius: 14,
+                                                    style: .continuous
+                                                )
+                                            )
+                                            .shadow(
+                                                color: AppPalette.brightBlue.opacity(0.12),
+                                                radius: 8,
+                                                y: 4
+                                            )
+                                    }}
                             }
+                            
+                            
                             .padding(.horizontal, 20)
                             .padding(.top, 2)
-
+                            
                             VStack(alignment: .leading, spacing: 16) {
                                 HStack {
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("Storage Tracker")
                                             .font(.headline)
                                             .foregroundColor(AppPalette.titleColor)
-
+                                        
                                         Text("It’s not messy… just full of potential.")
                                             .font(.subheadline)
                                             .foregroundColor(.secondary)
                                     }
-
+                                    
                                     Spacer()
-
+                                    
                                     Image(systemName: "internaldrive")
                                         .font(.system(size: 20, weight: .semibold))
                                         .foregroundColor(AppPalette.brightBlue)
@@ -329,7 +365,7 @@ struct ContentView: View {
                                         .background(AppPalette.brightBlue.opacity(0.10))
                                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                 }
-
+                                
                                 HStack(spacing: 12) {
                                     ForEach(storageTrackerCards) { card in
                                         NavigationLink(destination: card.destination) {
@@ -341,7 +377,7 @@ struct ContentView: View {
                                         .buttonStyle(.plain)
                                     }
                                 }
-
+                                
                                 StorageGaugeView(
                                     usedBytes: storageInfo.usedBytes,
                                     totalBytes: storageInfo.totalBytes,
@@ -360,18 +396,18 @@ struct ContentView: View {
                             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                             .shadow(color: AppPalette.brightBlue.opacity(0.08), radius: 10, y: 4)
                             .padding(.horizontal, 20)
-
+                            
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Start Cleaning")
                                     .font(.system(size: 26, weight: .bold, design: .rounded))
                                     .foregroundColor(AppPalette.titleColor)
-
+                                
                                 Text("Choose your chaos.")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
                             .padding(.horizontal, 20)
-
+                            
                             LazyVGrid(columns: columns, spacing: 18) {
                                 ForEach(topTwoCleanupCards) { card in
                                     NavigationLink(destination: card.destination) {
@@ -389,7 +425,7 @@ struct ContentView: View {
                             }
                             .buttonStyle(.plain)
                             .padding(.horizontal, 20)
-
+                            
                             Spacer(minLength: 24)
                         }
                         .padding(.top, 12)
@@ -397,77 +433,191 @@ struct ContentView: View {
                     }
                 }
                 .navigationBarTitleDisplayMode(.inline)
-                .toolbar(.hidden, for: .navigationBar)
                 .onAppear {
                     storageInfo = StorageManager.getStorageInfo()
                     photoManager.fetchAllPhotos()
+                    if !hasSeenInstructions {
+                        showInstructions = true
+                        hasSeenInstructions = true
+                    }
+                }
+                .sheet(isPresented: $showInstructions) {
+                    NavigationStack {
+                        VStack(spacing: 22) {
+                            Text("Welcome to Snap Sweeper")
+                                .font(.title3.bold())
+                            Text("Snap Sweeper helps clean up your photo library without losing the memories that matter most.")
+                                .font(.body)
+                                .multilineTextAlignment(.center)
+                                .padding(.top, 10)
+                                .padding(.bottom, 4)
+                            LazyVGrid(
+                                columns: [
+                                    GridItem(.flexible()),
+                                    GridItem(.flexible())
+                                ],
+                                spacing: 14
+                            ) {
+                                MiniFeatureCard(
+                                    icon: "iphone",
+                                    title: "Screenshots",
+                                    color: AppPalette.softPurple,
+                                    subtitle: "Forgotten saves"
+                                )
+                                MiniFeatureCard(
+                                    icon: "sparkles.tv",
+                                    title: "Blurry",
+                                    color: AppPalette.darkLemon,
+                                    subtitle: "Find fuzzy photos"
+                                )
+                                MiniFeatureCard(
+                                    icon: "square.on.square",
+                                    title: "Similar",
+                                    color: AppPalette.softPink,
+                                    subtitle: "Remove duplicates"
+                                )
+                                MiniFeatureCard(
+                                    icon: "video.fill",
+                                    title: "Videos",
+                                    color: AppPalette.lightVideoBlue,
+                                    subtitle: "Large file cleanup"
+                                )
+                                MiniFeatureCard(
+                                    icon: "map.fill",
+                                    title: "Map",
+                                    color: AppPalette.softMap,
+                                    subtitle: "Browse by location"
+                                )
+                            }
+                            .padding(.horizontal)
+                            VStack(alignment: .leading, spacing: 14) {
+                                Label(
+                                    "Start with the highest counts for the fastest cleanup.",
+                                    systemImage: "sparkles"
+                                )
+                                Label(
+                                    "Track which categories take up the most storage.",
+                                    systemImage: "internaldrive"
+                                )
+                                Label(
+                                    "Protect important photos in Vault.",
+                                    systemImage: "lock.shield"
+                                )
+                            }
+                            .font(.subheadline)
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(.systemGray6))
+                            .cornerRadius(18)
+                            Button {
+                                showInstructions = false
+                            } label: {
+                                Text("Start Sweeping")
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(AppPalette.darkLemon)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(14)
+                            }
+                        }
+                        .padding()
+                        .navigationBarTitleDisplayMode(.inline)
+                    }
                 }
             }
         }
     }
-
+    struct MiniFeatureCard: View {
+        let icon: String
+        let title: String
+        let color: Color
+        let subtitle: String
+        
+        var body: some View {
+            VStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.title2)
+                Text(title)
+                    .font(.headline)
+                
+                Text(subtitle)
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                
+            }
+            .foregroundStyle(AppPalette.titleColor)
+            .frame(maxWidth: .infinity)
+            .frame(height: 115)
+            .background(color.opacity(0.25))
+            .cornerRadius(20)
+            .shadow(color: color.opacity(0.15), radius: 6, y:3)
+        }
+    }
     // MARK: - Clean Hub Tab
     struct CleanHubView: View {
         @ObservedObject var photoManager: PhotoManager
         @Binding var selectedTab: Int
-
+        
         let columns = [
             GridItem(.flexible(), spacing: 18),
             GridItem(.flexible(), spacing: 18)
         ]
-
+        
         var body: some View {
             NavigationStack {
                 ZStack {
                     AppPalette.pageBackground
                         .ignoresSafeArea()
-
+                    
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 22) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("CLEAN HUB")
                                     .font(.system(size: 30, weight: .bold, design: .rounded))
                                     .foregroundColor(AppPalette.titleColor)
-
+                                
                                 Text("Pick your cleanup mission.")
                                     .font(.subheadline)
                                     .foregroundColor(.secondary)
                             }
                             .padding(.horizontal, 20)
                             .padding(.top, 8)
-
+                            
                             LazyVGrid(columns: columns, spacing: 18) {
                                 NavigationLink(destination: ResultsView(assets: photoManager.screenshotAssets, photoManager: photoManager)) {
                                     CleanActionCard(theme: ContentView.screenshotTheme, buttonTitle: "Review", count: photoManager.screenshotCount)
                                 }
-
+                                
                                 NavigationLink(destination: BlurryPhotosView(photoManager: photoManager)) {
                                     CleanActionCard(theme: ContentView.blurryTheme, buttonTitle: "Review", count: photoManager.blurryCount)
                                 }
-
+                                
                                 NavigationLink(destination: DuplicatesView(photoManager: photoManager)) {
                                     CleanActionCard(theme: ContentView.similarTheme, buttonTitle: "Compare", count: photoManager.duplicateGroups.count)
                                 }
-
+                                
                                 NavigationLink(destination: VideoResultsView(photoManager: photoManager)) {
                                     CleanActionCard(theme: ContentView.videoTheme, buttonTitle: "Review", count: photoManager.videoCount)
                                 }
-
+                                
                                 NavigationLink(destination: MapSweeperView(photoManager: photoManager)) {
                                     CleanActionCard(theme: ContentView.mapTheme, buttonTitle: "Explore", count: photoManager.allPhotoAssets.filter { $0.location != nil }.count)
                                 }
-
+                                
                                 NavigationLink(destination: ManualReviewView(photoManager: photoManager)) {
                                     CleanActionCard(theme: ContentView.manualTheme, buttonTitle: "Open", count: photoManager.allPhotoAssets.count)
                                 }
-
+                                
                                 NavigationLink(destination: ProtectedPhotosView(photoManager: photoManager, selectedTab: $selectedTab)) {
                                     CleanActionCard(theme: ContentView.vaultTheme, buttonTitle: "Open", count: photoManager.protectedAssets.count)
                                 }
                             }
                             .buttonStyle(.plain)
                             .padding(.horizontal, 20)
-
+                            
                             Spacer(minLength: 24)
                         }
                         .padding(.vertical, 12)
@@ -481,7 +631,7 @@ struct ContentView: View {
             }
         }
     }
-
+    
     // MARK: - New UI Components
     struct CleanActionCard: View {
         let icon: String
@@ -491,7 +641,7 @@ struct ContentView: View {
         let count: Int
         let accentColor: Color
         let buttonTextColor: Color
-
+        
         init(icon: String, title: String, subtitle: String, buttonTitle: String, count: Int, accentColor: Color, buttonTextColor: Color) {
             self.icon = icon
             self.title = title
@@ -501,7 +651,7 @@ struct ContentView: View {
             self.accentColor = accentColor
             self.buttonTextColor = buttonTextColor
         }
-
+        
         init(theme: CleanupTheme, buttonTitle: String, count: Int) {
             self.icon = theme.icon
             self.title = theme.title
@@ -511,7 +661,7 @@ struct ContentView: View {
             self.accentColor = theme.accentColor
             self.buttonTextColor = theme.buttonTextColor
         }
-
+        
         var body: some View {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top) {
@@ -519,14 +669,14 @@ struct ContentView: View {
                         RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .fill(accentColor.opacity(0.28))
                             .frame(width: 52, height: 52)
-
+                        
                         Image(systemName: icon)
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundColor(accentColor)
                     }
-
+                    
                     Spacer()
-
+                    
                     Text("\(count)")
                         .font(.caption.weight(.bold))
                         .foregroundColor(AppPalette.titleColor)
@@ -535,22 +685,22 @@ struct ContentView: View {
                         .background(Color.white.opacity(0.85))
                         .clipShape(Capsule())
                 }
-
+                
                 VStack(alignment: .leading, spacing: 5) {
                     Text(title)
                         .font(.system(size: 19, weight: .bold, design: .rounded))
                         .foregroundColor(AppPalette.titleColor)
                         .lineLimit(1)
-
+                    
                     Text(subtitle)
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-
+                
                 Spacer(minLength: 4)
-
+                
                 Text(buttonTitle)
                     .font(.caption.weight(.bold))
                     .foregroundColor(buttonTextColor)
@@ -566,40 +716,40 @@ struct ContentView: View {
             .shadow(color: accentColor.opacity(0.12), radius: 10, y: 5)
         }
     }
-
+    
     struct WideFeatureCard: View {
         let theme: CleanupTheme
         let buttonTitle: String
         let countText: String
-
+        
         var body: some View {
             HStack(spacing: 14) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(theme.accentColor.opacity(0.20))
                         .frame(width: 56, height: 56)
-
+                    
                     Image(systemName: theme.icon)
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundColor(theme.accentColor)
                 }
-
+                
                 VStack(alignment: .leading, spacing: 4) {
                     Text(theme.title)
                         .font(.headline)
                         .foregroundColor(AppPalette.titleColor)
-
+                    
                     Text(theme.subtitle)
                         .font(.subheadline)
                         .foregroundColor(.secondary)
-
+                    
                     Text(countText)
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
                 }
-
+                
                 Spacer()
-
+                
                 Text(buttonTitle)
                     .font(.caption.weight(.bold))
                     .foregroundColor(theme.buttonTextColor)
@@ -614,11 +764,11 @@ struct ContentView: View {
             .shadow(color: theme.accentColor.opacity(0.12), radius: 10, y: 4)
         }
     }
-
+    
     struct NumberCircleBadge: View {
         let number: String
         let tint: Color
-
+        
         var body: some View {
             Text(number)
                 .font(.caption.weight(.bold))
@@ -628,12 +778,12 @@ struct ContentView: View {
                 .clipShape(Circle())
         }
     }
-
-
+    
+    
     // MARK: - Reusable Action Page Header
     struct FloatingBackButton: View {
         @Environment(\.dismiss) private var dismiss
-
+        
         var body: some View {
             Button(action: { dismiss() }) {
                 Image(systemName: "chevron.left")
@@ -646,33 +796,33 @@ struct ContentView: View {
             }
         }
     }
-
+    
     struct ThemedPageHeader: View {
         let theme: CleanupTheme
         let countText: String?
-
+        
         var body: some View {
             VStack(alignment: .leading, spacing: 20) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
                         .fill(theme.accentColor.opacity(0.26))
                         .frame(width: 76, height: 76)
-
+                    
                     Image(systemName: theme.icon)
                         .font(.system(size: 30, weight: .semibold))
                         .foregroundColor(theme.accentColor)
                 }
-
+                
                 VStack(alignment: .leading, spacing: 8) {
                     Text(theme.title)
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                         .foregroundColor(AppPalette.titleColor)
-
+                    
                     Text(theme.subtitle)
                         .font(.system(size: 19, weight: .medium, design: .rounded))
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-
+                    
                     if let countText = countText {
                         Text(countText)
                             .font(.system(size: 17, weight: .bold, design: .rounded))
@@ -687,17 +837,17 @@ struct ContentView: View {
             .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
         }
     }
-
+    
     struct HeaderPillLabel: View {
         let text: String
         let systemImage: String
         let tint: Color
-
+        
         var body: some View {
             HStack(spacing: 10) {
                 Image(systemName: systemImage)
                     .font(.system(size: 18, weight: .semibold))
-
+                
                 Text(text)
                     .font(.system(size: 17, weight: .bold, design: .rounded))
             }
@@ -708,7 +858,7 @@ struct ContentView: View {
             .clipShape(Capsule())
         }
     }
-
+    
     // 1. Keep this outside so it's accessible to the whole view
     struct PhotoAnnotation: Identifiable {
         let id = UUID()
@@ -726,18 +876,18 @@ struct ContentView: View {
             center: CLLocationCoordinate2D(latitude: 37.0902, longitude: -95.7129),
             span: MKCoordinateSpan(latitudeDelta: 120, longitudeDelta: 120)
         )
-
+        
         let theme = ContentView.mapTheme
-
+        
         func performSearch(query: String) {
             let request = MKLocalSearch.Request()
             request.naturalLanguageQuery = query
             request.region = region
-
+            
             let search = MKLocalSearch(request: request)
             search.start { response, error in
                 guard let item = response?.mapItems.first else { return }
-
+                
                 withAnimation(.easeInOut) {
                     region = MKCoordinateRegion(
                         center: item.placemark.coordinate,
@@ -746,20 +896,20 @@ struct ContentView: View {
                 }
             }
         }
-
+        
         struct LocationKey: Hashable {
             let latitude: Double
             let longitude: Double
         }
-
+        
         var annotations: [PhotoAnnotation] {
             let filtered = photoManager.allPhotoAssets.filter { asset in
                 guard let date = asset.creationDate else { return false }
                 return date >= startDate && date <= endDate
             }
-
+            
             var clusterData: [LocationKey: [PHAsset]] = [:]
-
+            
             for asset in filtered {
                 if let loc = asset.location {
                     let roundedLat = (loc.coordinate.latitude * 1000).rounded() / 1000
@@ -768,7 +918,7 @@ struct ContentView: View {
                     clusterData[key, default: []].append(asset)
                 }
             }
-
+            
             return clusterData.map { key, assets in
                 PhotoAnnotation(
                     assets: assets,
@@ -776,32 +926,32 @@ struct ContentView: View {
                 )
             }
         }
-
+        
         var body: some View {
             ZStack {
                 AppPalette.pageBackground
                     .ignoresSafeArea()
-
+                
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(alignment: .leading, spacing: 18) {
                         FloatingBackButton()
                             .padding(.leading, 16)
-
+                        
                         ThemedPageHeader(
                             theme: theme,
                             countText: "\(annotations.count) spots"
                         )
                         .padding(.horizontal, 16)
-
+                        
                         VStack(spacing: 12) {
                             HStack {
                                 Image(systemName: "magnifyingglass")
                                     .foregroundColor(.secondary)
-
+                                
                                 TextField("Search for a location...", text: $searchText)
                                     .textFieldStyle(.plain)
                                     .onSubmit { performSearch(query: searchText) }
-
+                                
                                 if !searchText.isEmpty {
                                     Button(action: { searchText = "" }) {
                                         Image(systemName: "xmark.circle.fill")
@@ -812,27 +962,27 @@ struct ContentView: View {
                             .padding(12)
                             .background(Color.white)
                             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
+                            
                             HStack {
                                 DatePicker("", selection: $startDate, displayedComponents: .date)
                                     .labelsHidden()
-
+                                
                                 Text("to")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-
+                                
                                 DatePicker("", selection: $endDate, displayedComponents: .date)
                                     .labelsHidden()
-
+                                
                                 Spacer()
-
+                                
                                 Text("\(photoManager.allPhotoAssets.filter { $0.location != nil }.count) photos")
                                     .font(.caption.weight(.bold))
                                     .foregroundColor(AppPalette.titleColor)
                             }
                         }
                         .padding(.horizontal, 16)
-
+                        
                         Map(coordinateRegion: $region, annotationItems: annotations) { annotation in
                             MapAnnotation(coordinate: annotation.coordinate) {
                                 NavigationLink(destination: LocationGroupView(assets: annotation.assets, photoManager: photoManager)) {
@@ -843,7 +993,7 @@ struct ContentView: View {
                                                 .clipShape(Circle())
                                                 .overlay(Circle().stroke(Color.white, lineWidth: 2))
                                                 .shadow(radius: 3)
-
+                                            
                                             let totalSize = annotation.assets.reduce(0) { $0 + photoManager.getSize(for: $1) }
                                             Text(ByteCountFormatter.string(fromByteCount: totalSize, countStyle: .file))
                                                 .font(.system(size: 8, weight: .bold))
@@ -852,7 +1002,7 @@ struct ContentView: View {
                                                 .foregroundColor(.white)
                                                 .cornerRadius(4)
                                         }
-
+                                        
                                         if annotation.count > 1 {
                                             Text("\(annotation.count)")
                                                 .font(.system(size: 10, weight: .bold))
@@ -882,7 +1032,7 @@ struct ContentView: View {
                                         .background(.ultraThinMaterial)
                                         .clipShape(Circle())
                                 }
-
+                                
                                 Button(action: {
                                     withAnimation {
                                         region.span.latitudeDelta = min(region.span.latitudeDelta * 4, 120)
@@ -908,23 +1058,23 @@ struct ContentView: View {
             .onAppear { photoManager.fetchAllPhotos() }
         }
     }
-
-
+    
+    
     
     // MARK: - Video Results View
     struct VideoResultsView: View {
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
         @State private var dragLocation: CGPoint = .zero
-
+        
         let theme = ContentView.videoTheme
-
+        
         let columns = [
             GridItem(.flexible(), spacing: 4),
             GridItem(.flexible(), spacing: 4),
             GridItem(.flexible(), spacing: 4)
         ]
-
+        
         var formattedSize: String {
             let selectedAssets = photoManager.videoAssets.filter {
                 selectionManager.selectedAssetIDs.contains($0.localIdentifier)
@@ -932,29 +1082,29 @@ struct ContentView: View {
             let bytes = selectionManager.calculateTotalSize(assets: selectedAssets)
             return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
         }
-
+        
         func updateThreshold(to seconds: Double) {
             photoManager.videoThreshold = seconds
             photoManager.fetchVideos()
         }
-
+        
         var body: some View {
             ZStack {
                 AppPalette.pageBackground
                     .ignoresSafeArea()
-
+                
                 VStack(spacing: 0) {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 18) {
                             FloatingBackButton()
                                 .padding(.leading, 16)
-
+                            
                             ThemedPageHeader(
                                 theme: theme,
                                 countText: "\(photoManager.videoAssets.count) items"
                             )
                             .padding(.horizontal, 16)
-
+                            
                             HStack {
                                 Menu {
                                     Section("Minimum Duration") {
@@ -965,7 +1115,7 @@ struct ContentView: View {
                                 } label: {
                                     HeaderPillLabel(text: "Limit", systemImage: "timer", tint: theme.accentColor)
                                 }
-
+                                
                                 Menu {
                                     ForEach(PhotoManager.SortStrategy.allCases, id: \.self) { strategy in
                                         Button(strategy.rawValue) { photoManager.sortVideos(by: strategy) }
@@ -973,9 +1123,9 @@ struct ContentView: View {
                                 } label: {
                                     HeaderPillLabel(text: "Sort", systemImage: "arrow.up.arrow.down", tint: theme.accentColor)
                                 }
-
+                                
                                 Spacer()
-
+                                
                                 Button(selectionManager.selectedAssetIDs.count == photoManager.videoAssets.count && !photoManager.videoAssets.isEmpty ? "Deselect All" : "Select All") {
                                     if selectionManager.selectedAssetIDs.count == photoManager.videoAssets.count {
                                         selectionManager.deselectAll()
@@ -987,7 +1137,7 @@ struct ContentView: View {
                                 .font(.system(size: 17, weight: .bold, design: .rounded))
                             }
                             .padding(.horizontal, 16)
-
+                            
                             LazyVGrid(columns: columns, spacing: 4) {
                                 ForEach(photoManager.videoAssets, id: \.localIdentifier) { asset in
                                     NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: false)) {
@@ -1006,7 +1156,7 @@ struct ContentView: View {
                                     )
                                     .overlay(alignment: .bottomTrailing) { VideoBadge(asset: asset) }
                                     .overlay(alignment: .topTrailing) {
-                                        ContentView.SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
+                                        SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
                                     }
                                 }
                             }
@@ -1020,7 +1170,7 @@ struct ContentView: View {
                             .onChanged { dragLocation = $0.location }
                             .onEnded { _ in dragLocation = .zero }
                     )
-
+                    
                     if !selectionManager.selectedAssetIDs.isEmpty {
                         VStack(spacing: 12) {
                             HStack(spacing: 15) {
@@ -1039,7 +1189,7 @@ struct ContentView: View {
                                     .foregroundColor(.white)
                                     .cornerRadius(12)
                                 }
-
+                                
                                 Button(action: {
                                     photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
                                         selectionManager.deselectAll()
@@ -1057,7 +1207,7 @@ struct ContentView: View {
                                     .cornerRadius(12)
                                 }
                             }
-
+                            
                             Text("You will save \(Text(formattedSize).bold()) of space.")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -1074,8 +1224,8 @@ struct ContentView: View {
             .onAppear { photoManager.fetchVideos() }
         }
     }
-
-
+    
+    
     
     // MARK: - Screenshot Results View
     struct ResultsView: View {
@@ -1083,15 +1233,15 @@ struct ContentView: View {
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
         @State private var dragLocation: CGPoint = .zero
-
+        
         let theme = ContentView.screenshotTheme
-
+        
         let columns = [
             GridItem(.flexible(), spacing: 4),
             GridItem(.flexible(), spacing: 4),
             GridItem(.flexible(), spacing: 4)
         ]
-
+        
         var formattedSize: String {
             let selectedAssets = assets.filter {
                 selectionManager.selectedAssetIDs.contains($0.localIdentifier)
@@ -1099,24 +1249,24 @@ struct ContentView: View {
             let bytes = selectionManager.calculateTotalSize(assets: selectedAssets)
             return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
         }
-
+        
         var body: some View {
             ZStack {
                 AppPalette.pageBackground
                     .ignoresSafeArea()
-
+                
                 VStack(spacing: 0) {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 18) {
                             FloatingBackButton()
                                 .padding(.leading, 16)
-
+                            
                             ThemedPageHeader(
                                 theme: theme,
                                 countText: "\(assets.count) items"
                             )
                             .padding(.horizontal, 16)
-
+                            
                             HStack {
                                 Menu {
                                     ForEach(PhotoManager.SortStrategy.allCases, id: \.self) { strategy in
@@ -1125,9 +1275,9 @@ struct ContentView: View {
                                 } label: {
                                     HeaderPillLabel(text: "Sort", systemImage: "arrow.up.arrow.down", tint: theme.accentColor)
                                 }
-
+                                
                                 Spacer()
-
+                                
                                 Button(selectionManager.selectedAssetIDs.count == assets.count && !assets.isEmpty ? "Deselect All" : "Select All") {
                                     if selectionManager.selectedAssetIDs.count == assets.count {
                                         selectionManager.deselectAll()
@@ -1139,7 +1289,7 @@ struct ContentView: View {
                                 .font(.system(size: 17, weight: .bold, design: .rounded))
                             }
                             .padding(.horizontal, 16)
-
+                            
                             LazyVGrid(columns: columns, spacing: 4) {
                                 ForEach(assets, id: \.localIdentifier) { asset in
                                     NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
@@ -1158,7 +1308,7 @@ struct ContentView: View {
                                     )
                                     .overlay(alignment: .bottomTrailing) { VideoBadge(asset: asset) }
                                     .overlay(alignment: .topTrailing) {
-                                        ContentView.SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
+                                        SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
                                     }
                                 }
                             }
@@ -1172,7 +1322,7 @@ struct ContentView: View {
                             .onChanged { dragLocation = $0.location }
                             .onEnded { _ in dragLocation = .zero }
                     )
-
+                    
                     if !selectionManager.selectedAssetIDs.isEmpty {
                         VStack(spacing: 12) {
                             HStack(spacing: 15) {
@@ -1190,7 +1340,7 @@ struct ContentView: View {
                                     .foregroundColor(.white)
                                     .cornerRadius(12)
                                 }
-
+                                
                                 Button(action: {
                                     photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
                                         selectionManager.deselectAll()
@@ -1207,7 +1357,7 @@ struct ContentView: View {
                                     .cornerRadius(12)
                                 }
                             }
-
+                            
                             Text("You will save \(Text(formattedSize).bold()) of space.")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -1223,8 +1373,8 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
     }
-
-
+    
+    
     
     // MARK: - Vault View
     struct VaultResultsView: View {
@@ -1232,15 +1382,15 @@ struct ContentView: View {
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
         @State private var dragLocation: CGPoint = .zero
-
+        
         let theme = ContentView.vaultTheme
-
+        
         let columns = [
             GridItem(.flexible(), spacing: 4),
             GridItem(.flexible(), spacing: 4),
             GridItem(.flexible(), spacing: 4)
         ]
-
+        
         var formattedSize: String {
             let selectedAssets = assets.filter {
                 selectionManager.selectedAssetIDs.contains($0.localIdentifier)
@@ -1248,12 +1398,12 @@ struct ContentView: View {
             let bytes = selectionManager.calculateTotalSize(assets: selectedAssets)
             return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
         }
-
+        
         var body: some View {
             ZStack {
                 AppPalette.pageBackground
                     .ignoresSafeArea()
-
+                
                 VStack(spacing: 0) {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 18) {
@@ -1262,7 +1412,7 @@ struct ContentView: View {
                                 countText: "\(assets.count) protected items"
                             )
                             .padding(.horizontal, 16)
-
+                            
                             HStack {
                                 Menu {
                                     ForEach(PhotoManager.SortStrategy.allCases, id: \.self) { strategy in
@@ -1271,9 +1421,9 @@ struct ContentView: View {
                                 } label: {
                                     HeaderPillLabel(text: "Sort", systemImage: "arrow.up.arrow.down", tint: theme.accentColor)
                                 }
-
+                                
                                 Spacer()
-
+                                
                                 Button(selectionManager.selectedAssetIDs.count == assets.count && !assets.isEmpty ? "Deselect All" : "Select All") {
                                     if selectionManager.selectedAssetIDs.count == assets.count {
                                         selectionManager.deselectAll()
@@ -1285,7 +1435,7 @@ struct ContentView: View {
                                 .font(.system(size: 17, weight: .bold, design: .rounded))
                             }
                             .padding(.horizontal, 16)
-
+                            
                             LazyVGrid(columns: columns, spacing: 4) {
                                 ForEach(assets, id: \.localIdentifier) { asset in
                                     NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager, isFromVault: true)) {
@@ -1304,7 +1454,7 @@ struct ContentView: View {
                                     )
                                     .overlay(alignment: .bottomTrailing) { VideoBadge(asset: asset) }
                                     .overlay(alignment: .topTrailing) {
-                                        ContentView.SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
+                                        SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
                                     }
                                 }
                             }
@@ -1318,7 +1468,7 @@ struct ContentView: View {
                             .onChanged { dragLocation = $0.location }
                             .onEnded { _ in dragLocation = .zero }
                     )
-
+                    
                     if !selectionManager.selectedAssetIDs.isEmpty {
                         SummaryBar(label: "Permanently Delete \(selectionManager.selectedAssetIDs.count) Items", size: formattedSize) {
                             photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
@@ -1334,37 +1484,37 @@ struct ContentView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
     }
-
-
+    
+    
     struct DuplicatesView: View {
         @ObservedObject var photoManager: PhotoManager
         @State private var selectedGroupIndices = Set<Int>()
-
+        
         let theme = ContentView.similarTheme
-
+        
         var totalBulkSavings: Int64 {
             selectedGroupIndices.reduce(0) { sum, index in
                 sum + calculatePotentialSavings(photoManager.duplicateGroups[index])
             }
         }
-
+        
         var body: some View {
             ZStack {
                 AppPalette.pageBackground
                     .ignoresSafeArea()
-
+                
                 VStack(spacing: 0) {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 18) {
                             FloatingBackButton()
                                 .padding(.leading, 16)
-
+                            
                             ThemedPageHeader(
                                 theme: theme,
                                 countText: "\(photoManager.duplicateGroups.count) groups"
                             )
                             .padding(.horizontal, 16)
-
+                            
                             HStack {
                                 Button(selectedGroupIndices.count == photoManager.duplicateGroups.count && !photoManager.duplicateGroups.isEmpty ? "Deselect All" : "Select All") {
                                     if selectedGroupIndices.count == photoManager.duplicateGroups.count {
@@ -1375,16 +1525,16 @@ struct ContentView: View {
                                 }
                                 .foregroundColor(theme.accentColor)
                                 .font(.system(size: 17, weight: .bold, design: .rounded))
-
+                                
                                 Spacer()
                             }
                             .padding(.horizontal, 16)
-
+                            
                             VStack(spacing: 12) {
                                 ForEach(0..<photoManager.duplicateGroups.count, id: \.self) { index in
                                     let group = photoManager.duplicateGroups[index]
                                     let isSelected = selectedGroupIndices.contains(index)
-
+                                    
                                     HStack(spacing: 15) {
                                         Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
                                             .font(.title2)
@@ -1396,26 +1546,26 @@ struct ContentView: View {
                                                     selectedGroupIndices.insert(index)
                                                 }
                                             }
-
+                                        
                                         NavigationLink(destination: DuplicateGroupDetailView(group: group, photoManager: photoManager)) {
                                             HStack {
                                                 PhotoThumbnail(asset: group.first!)
                                                     .frame(width: 55, height: 55)
                                                     .cornerRadius(8)
                                                     .contentShape(Rectangle())
-
+                                                
                                                 VStack(alignment: .leading, spacing: 2) {
                                                     Text("Group \(index + 1)")
                                                         .font(.headline)
                                                         .foregroundColor(AppPalette.titleColor)
-
+                                                    
                                                     Text("\(group.count) similar photos")
                                                         .font(.subheadline)
                                                         .foregroundColor(.secondary)
                                                 }
-
+                                                
                                                 Spacer()
-
+                                                
                                                 Text("Save \(ByteCountFormatter.string(fromByteCount: calculatePotentialSavings(group), countStyle: .file))")
                                                     .font(.caption2)
                                                     .bold()
@@ -1438,7 +1588,7 @@ struct ContentView: View {
                         }
                         .padding(.top, 12)
                     }
-
+                    
                     if !selectedGroupIndices.isEmpty {
                         VStack(spacing: 12) {
                             HStack(spacing: 15) {
@@ -1453,7 +1603,7 @@ struct ContentView: View {
                                     .foregroundColor(.white)
                                     .cornerRadius(12)
                                 }
-
+                                
                                 Button(action: { bulkDeleteGroups() }) {
                                     VStack {
                                         Image(systemName: "trash.fill")
@@ -1466,7 +1616,7 @@ struct ContentView: View {
                                     .cornerRadius(12)
                                 }
                             }
-
+                            
                             Text("Bulk action will save \(Text(ByteCountFormatter.string(fromByteCount: totalBulkSavings, countStyle: .file)).bold())")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -1484,13 +1634,13 @@ struct ContentView: View {
                 photoManager.scanForDuplicates()
             }
         }
-
+        
         func calculatePotentialSavings(_ group: [PHAsset]) -> Int64 {
             guard group.count > 1 else { return 0 }
             let total = group.reduce(0) { $0 + photoManager.getSize(for: $1) }
             return total - photoManager.getSize(for: group.first!)
         }
-
+        
         func bulkDeleteGroups() {
             var idsToDelete: [String] = []
             for index in selectedGroupIndices {
@@ -1498,7 +1648,7 @@ struct ContentView: View {
                 let others = group.dropFirst().map { $0.localIdentifier }
                 idsToDelete.append(contentsOf: others)
             }
-
+            
             photoManager.deleteAssets(ids: Set(idsToDelete)) { success in
                 if success {
                     selectedGroupIndices.removeAll()
@@ -1506,7 +1656,7 @@ struct ContentView: View {
                 }
             }
         }
-
+        
         func bulkVaultGroups() {
             for index in selectedGroupIndices {
                 let group = photoManager.duplicateGroups[index]
@@ -1519,14 +1669,14 @@ struct ContentView: View {
         }
     }
     
-
+    
     // MARK: - Duplicate Group Detail View
     struct DuplicateGroupDetailView: View {
         let group: [PHAsset]
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
         @Environment(\.dismiss) var dismiss
-
+        
         var formattedSelectionSize: String {
             let selectedAssets = group.filter {
                 selectionManager.selectedAssetIDs.contains($0.localIdentifier)
@@ -1534,27 +1684,27 @@ struct ContentView: View {
             let bytes = selectionManager.calculateTotalSize(assets: selectedAssets)
             return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
         }
-
+        
         var body: some View {
             ZStack {
                 AppPalette.pageBackground
                     .ignoresSafeArea()
-
+                
                 VStack(spacing: 0) {
                     TabView {
                         ForEach(group, id: \.localIdentifier) { asset in
                             VStack(spacing: 18) {
                                 Spacer()
-
+                                
                                 PhotoThumbnail(asset: asset)
                                     .aspectRatio(contentMode: .fit)
                                     .cornerRadius(16)
                                     .padding(.horizontal)
-
+                                
                                 Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundColor(.secondary)
-
+                                
                                 Button(action: {
                                     selectionManager.toggleSelection(id: asset.localIdentifier)
                                 }) {
@@ -1570,14 +1720,14 @@ struct ContentView: View {
                                     .cornerRadius(14)
                                 }
                                 .padding(.horizontal, 40)
-
+                                
                                 Spacer()
                             }
                         }
                     }
                     .tabViewStyle(.page)
                     .indexViewStyle(.page(backgroundDisplayMode: .always))
-
+                    
                     if !selectionManager.selectedAssetIDs.isEmpty {
                         VStack(spacing: 15) {
                             HStack(spacing: 15) {
@@ -1600,7 +1750,7 @@ struct ContentView: View {
                                     .foregroundColor(.white)
                                     .cornerRadius(12)
                                 }
-
+                                
                                 Button(action: {
                                     photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
                                         photoManager.scanForDuplicates()
@@ -1620,7 +1770,7 @@ struct ContentView: View {
                                     .cornerRadius(12)
                                 }
                             }
-
+                            
                             Text("You will save \(Text(formattedSelectionSize).bold()) of space.")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -1642,12 +1792,12 @@ struct ContentView: View {
             }
         }
     }
-
+    
     // MARK: - Core Supporting Views
     struct SelectionToggle: View {
         let id: String
         @ObservedObject var selectionManager: SelectionManager
-
+        
         var body: some View {
             Image(systemName: selectionManager.selectedAssetIDs.contains(id) ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 22))
@@ -1661,10 +1811,10 @@ struct ContentView: View {
                 }
         }
     }
-
+    
     struct VideoBadge: View {
         let asset: PHAsset
-
+        
         var durationString: String {
             let formatter = DateComponentsFormatter()
             formatter.allowedUnits = [.minute, .second]
@@ -1672,7 +1822,7 @@ struct ContentView: View {
             formatter.zeroFormattingBehavior = .pad
             return formatter.string(from: asset.duration) ?? "0:00"
         }
-
+        
         var body: some View {
             if asset.mediaType == .video {
                 Text(durationString)
@@ -1686,12 +1836,12 @@ struct ContentView: View {
             }
         }
     }
-
+    
     struct SummaryBar: View {
         let label: String
         let size: String
         let action: () -> Void
-
+        
         var body: some View {
             VStack(spacing: 12) {
                 Button(action: action) {
@@ -1703,7 +1853,7 @@ struct ContentView: View {
                         .foregroundColor(.white)
                         .cornerRadius(12)
                 }
-
+                
                 Text("You will save \(Text(size).bold()) of space.")
                     .font(.caption2)
                     .foregroundColor(.secondary)
@@ -1713,24 +1863,24 @@ struct ContentView: View {
             .shadow(color: .black.opacity(0.1), radius: 10, y: -5)
         }
     }
-
+    
     struct VideoThumbnail: View {
         let asset: PHAsset
-
+        
         var body: some View {
             ZStack(alignment: .bottomTrailing) {
                 PhotoThumbnail(asset: asset)
                     .contentShape(Rectangle())
-
+                
                 VideoBadge(asset: asset)
             }
         }
     }
-
+    
     struct PhotoThumbnail: View {
         let asset: PHAsset
         @State private var image: UIImage? = nil
-
+        
         var body: some View {
             GeometryReader { geometry in
                 Group {
@@ -1758,34 +1908,34 @@ struct ContentView: View {
             }
         }
     }
-
+    
     // MARK: - Manual Review View
     struct ManualReviewView: View {
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
         @State private var dragLocation: CGPoint = .zero
-
+        
         @State private var selectedSort: PhotoManager.SortStrategy = .newest
         @State private var filterPhotos = true
         @State private var filterVideos = true
-
+        
         let theme = ContentView.manualTheme
-
+        
         let columns = [
             GridItem(.flexible(), spacing: 4),
             GridItem(.flexible(), spacing: 4),
             GridItem(.flexible(), spacing: 4)
         ]
-
+        
         var processedAssets: [PHAsset] {
             var filtered = photoManager.allPhotoAssets.filter { asset in
                 if asset.mediaType == .image && filterPhotos { return true }
                 if asset.mediaType == .video && filterVideos { return true }
                 return false
             }
-
+            
             filtered = filtered.filter { !photoManager.protectedAssetIDs.contains($0.localIdentifier) }
-
+            
             switch selectedSort {
             case .newest:
                 return filtered.sorted { ($0.creationDate ?? Date()) > ($1.creationDate ?? Date()) }
@@ -1795,7 +1945,7 @@ struct ContentView: View {
                 return filtered.sorted { photoManager.getSize(for: $0) > photoManager.getSize(for: $1) }
             }
         }
-
+        
         var formattedSize: String {
             let selectedAssets = processedAssets.filter {
                 selectionManager.selectedAssetIDs.contains($0.localIdentifier)
@@ -1803,39 +1953,39 @@ struct ContentView: View {
             let bytes = selectionManager.calculateTotalSize(assets: selectedAssets)
             return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
         }
-
+        
         var body: some View {
             ZStack {
                 AppPalette.pageBackground
                     .ignoresSafeArea()
-
+                
                 VStack(spacing: 0) {
                     ScrollView(.vertical, showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 18) {
                             FloatingBackButton()
                                 .padding(.leading, 16)
-
+                            
                             ThemedPageHeader(
                                 theme: theme,
                                 countText: "\(processedAssets.count) items"
                             )
                             .padding(.horizontal, 16)
-
+                            
                             VStack(spacing: 12) {
                                 HStack {
                                     Text("Show:")
                                         .font(.caption)
                                         .bold()
                                         .foregroundColor(.secondary)
-
+                                    
                                     Toggle("Photos", isOn: $filterPhotos)
                                         .toggleStyle(.button)
-
+                                    
                                     Toggle("Videos", isOn: $filterVideos)
                                         .toggleStyle(.button)
-
+                                    
                                     Spacer()
-
+                                    
                                     Button(selectionManager.selectedAssetIDs.count == processedAssets.count && !processedAssets.isEmpty ? "Deselect All" : "Select All") {
                                         if selectionManager.selectedAssetIDs.count == processedAssets.count {
                                             selectionManager.deselectAll()
@@ -1846,7 +1996,7 @@ struct ContentView: View {
                                     .foregroundColor(theme.accentColor)
                                     .font(.caption.bold())
                                 }
-
+                                
                                 Picker("Sort", selection: $selectedSort) {
                                     ForEach(PhotoManager.SortStrategy.allCases, id: \.self) { strategy in
                                         Text(strategy.rawValue).tag(strategy)
@@ -1855,7 +2005,7 @@ struct ContentView: View {
                                 .pickerStyle(.segmented)
                             }
                             .padding(.horizontal, 16)
-
+                            
                             LazyVGrid(columns: columns, spacing: 4) {
                                 ForEach(processedAssets, id: \.localIdentifier) { asset in
                                     NavigationLink(destination: PhotoDetailView(asset: asset, photoManager: photoManager, selectionManager: selectionManager)) {
@@ -1876,7 +2026,7 @@ struct ContentView: View {
                                         VideoBadge(asset: asset)
                                     }
                                     .overlay(alignment: .topTrailing) {
-                                        ContentView.SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
+                                        SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
                                     }
                                 }
                             }
@@ -1890,7 +2040,7 @@ struct ContentView: View {
                             .onChanged { dragLocation = $0.location }
                             .onEnded { _ in dragLocation = .zero }
                     )
-
+                    
                     if !selectionManager.selectedAssetIDs.isEmpty {
                         VStack(spacing: 15) {
                             HStack(spacing: 15) {
@@ -1913,7 +2063,7 @@ struct ContentView: View {
                                     .foregroundColor(.white)
                                     .cornerRadius(12)
                                 }
-
+                                
                                 Button(action: {
                                     photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
                                         selectionManager.deselectAll()
@@ -1933,7 +2083,7 @@ struct ContentView: View {
                                     .cornerRadius(12)
                                 }
                             }
-
+                            
                             Text("Selected: \(selectionManager.selectedAssetIDs.count) items (\(formattedSize))")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -1952,21 +2102,21 @@ struct ContentView: View {
             }
         }
     }
-
+    
     // MARK: - Storage Gauge
     struct StorageGaugeView: View {
         let usedBytes: Int64
         let totalBytes: Int64
         let deletedBytes: Int64
-
+        
         var usedPercentage: Double {
             totalBytes > 0 ? Double(usedBytes) / Double(totalBytes) : 0
         }
-
+        
         var clampedUsedPercentage: Double {
             min(max(usedPercentage, 0), 1)
         }
-
+        
         var body: some View {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -1974,11 +2124,11 @@ struct ContentView: View {
                         Text("\(Int(usedPercentage * 100))%")
                             .font(.system(size: 24, weight: .bold, design: .rounded))
                             .foregroundColor(AppPalette.titleColor)
-
+                        
                         VStack(alignment: .leading, spacing: 7) {
                             GeometryReader { geo in
                                 let markerX = max(8, min(geo.size.width - 8, geo.size.width * clampedUsedPercentage))
-
+                                
                                 ZStack(alignment: .leading) {
                                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                                         .fill(
@@ -1995,7 +2145,7 @@ struct ContentView: View {
                                                 endPoint: .trailing
                                             )
                                         )
-
+                                    
                                     Circle()
                                         .fill(Color.white.opacity(0.95))
                                         .frame(width: 14, height: 14)
@@ -2004,29 +2154,29 @@ struct ContentView: View {
                                 }
                             }
                             .frame(height: 12)
-
+                            
                             Text("Space is tight… we can fix that.")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     }
                 }
-
+                
                 HStack {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("Cleaned so far")
                             .font(.caption)
                             .foregroundColor(.secondary)
-
+                        
                         Text(ByteCountFormatter.string(fromByteCount: deletedBytes, countStyle: .file))
                             .font(.system(size: 12, weight: .medium, design: .rounded))
                             .foregroundColor(AppPalette.brightBlue.opacity(0.72))
                             .lineLimit(1)
                             .minimumScaleFactor(0.7)
                     }
-
+                    
                     Spacer()
-
+                    
                     Image(systemName: "sparkles")
                         .font(.system(size: 21, weight: .semibold))
                         .foregroundColor(AppPalette.brightBlue)
@@ -2042,32 +2192,32 @@ struct ContentView: View {
             .padding(.top, 4)
         }
     }
-
+    
     struct ActionCard: View {
         let title: String
         let count: Int
         let icon: String
         let color: Color
-
+        
         var body: some View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Image(systemName: icon)
                         .font(.title2)
                         .foregroundColor(color)
-
+                    
                     Spacer()
-
+                    
                     Image(systemName: "chevron.right")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-
+                
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(.headline)
                         .foregroundColor(.primary)
-
+                    
                     Text(count > 0 ? "\(count) items" : "Scan to start")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -2079,13 +2229,13 @@ struct ContentView: View {
             .cornerRadius(15)
         }
     }
-
+    
     // MARK: - Protected Photos / Vault
     struct ProtectedPhotosView: View {
         @ObservedObject var photoManager: PhotoManager
         @Binding var selectedTab: Int
         @StateObject private var authManager = AuthManager()
-
+        
         var body: some View {
             Group {
                 if authManager.isUnlocked {
@@ -2105,28 +2255,28 @@ struct ContentView: View {
                     ZStack {
                         AppPalette.pageBackground
                             .ignoresSafeArea()
-
+                        
                         VStack(spacing: 22) {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 28, style: .continuous)
                                     .fill(ContentView.vaultTheme.headerTint)
                                     .frame(width: 120, height: 120)
-
+                                
                                 Image(systemName: "lock.shield.fill")
                                     .font(.system(size: 58, weight: .semibold))
                                     .foregroundColor(ContentView.vaultTheme.accentColor)
                             }
-
+                            
                             Text("Vault is Locked")
                                 .font(.system(size: 28, weight: .bold, design: .rounded))
                                 .foregroundColor(AppPalette.titleColor)
-
+                            
                             Text("Use Face ID to access your protected media.")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
-
+                            
                             Button(action: {
                                 authManager.authenticate()
                             }) {
@@ -2148,24 +2298,24 @@ struct ContentView: View {
             }
         }
     }
-
+    
     // MARK: - Photo Detail
     struct PhotoDetailView: View {
         let asset: PHAsset
         let photoManager: PhotoManager
         @ObservedObject var selectionManager: SelectionManager
         var isFromVault: Bool = false
-
+        
         @Environment(\.dismiss) var dismiss
         @State private var fullImage: UIImage? = nil
         @State private var player: AVPlayer? = nil
         @State private var showVideoPlayer = false
-
+        
         var body: some View {
             ZStack {
                 AppPalette.pageBackground
                     .ignoresSafeArea()
-
+                
                 VStack(spacing: 20) {
                     ZStack {
                         if let img = fullImage {
@@ -2176,7 +2326,7 @@ struct ContentView: View {
                         } else {
                             ProgressView()
                         }
-
+                        
                         if asset.mediaType == .video {
                             Button(action: prepareAndPlayVideo) {
                                 Image(systemName: "play.circle.fill")
@@ -2194,17 +2344,17 @@ struct ContentView: View {
                                 }
                         }
                     }
-
+                    
                     VStack(spacing: 15) {
                         VStack(spacing: 4) {
                             Text(asset.creationDate?.formatted(date: .abbreviated, time: .shortened) ?? "Unknown Date")
                                 .font(.headline)
-
+                            
                             Text(ByteCountFormatter.string(fromByteCount: photoManager.getSize(for: asset), countStyle: .file))
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
                         }
-
+                        
                         if !isFromVault {
                             Button(action: {
                                 photoManager.toggleProtection(id: asset.localIdentifier)
@@ -2219,7 +2369,7 @@ struct ContentView: View {
                                     .cornerRadius(10)
                             }
                         }
-
+                        
                         Button(action: {
                             selectionManager.toggleSelection(id: asset.localIdentifier)
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -2247,7 +2397,7 @@ struct ContentView: View {
                 loadFullImage()
             }
         }
-
+        
         func loadFullImage() {
             PHImageManager.default().requestImage(
                 for: asset,
@@ -2258,14 +2408,14 @@ struct ContentView: View {
                 self.fullImage = img
             }
         }
-
+        
         func prepareAndPlayVideo() {
             let options = PHVideoRequestOptions()
             options.deliveryMode = .automatic
-
+            
             PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { avAsset, _, _ in
                 guard let avAsset = avAsset else { return }
-
+                
                 DispatchQueue.main.async {
                     self.player = AVPlayer(playerItem: AVPlayerItem(asset: avAsset))
                     self.showVideoPlayer = true
@@ -2273,20 +2423,20 @@ struct ContentView: View {
             }
         }
     }
-
+    
     // MARK: - Location Group View
     struct LocationGroupView: View {
         let assets: [PHAsset]
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
         @State private var dragLocation: CGPoint = .zero
-
+        
         let columns = [
             GridItem(.flexible(), spacing: 4),
             GridItem(.flexible(), spacing: 4),
             GridItem(.flexible(), spacing: 4)
         ]
-
+        
         var formattedSelectionSize: String {
             let selectedAssets = assets.filter {
                 selectionManager.selectedAssetIDs.contains($0.localIdentifier)
@@ -2294,12 +2444,12 @@ struct ContentView: View {
             let bytes = selectionManager.calculateTotalSize(assets: selectedAssets)
             return ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
         }
-
+        
         var body: some View {
             ZStack {
                 AppPalette.pageBackground
                     .ignoresSafeArea()
-
+                
                 VStack(spacing: 0) {
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVGrid(columns: columns, spacing: 4) {
@@ -2322,7 +2472,7 @@ struct ContentView: View {
                                     VideoBadge(asset: asset)
                                 }
                                 .overlay(alignment: .topTrailing) {
-                                    ContentView.SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
+                                    SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
                                 }
                             }
                         }
@@ -2335,7 +2485,7 @@ struct ContentView: View {
                             .onChanged { dragLocation = $0.location }
                             .onEnded { _ in dragLocation = .zero }
                     )
-
+                    
                     if !selectionManager.selectedAssetIDs.isEmpty {
                         VStack(spacing: 12) {
                             HStack(spacing: 15) {
@@ -2357,7 +2507,7 @@ struct ContentView: View {
                                     .foregroundColor(AppPalette.titleColor)
                                     .cornerRadius(12)
                                 }
-
+                                
                                 Button(action: {
                                     photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
                                         if success {
@@ -2378,7 +2528,7 @@ struct ContentView: View {
                                     .cornerRadius(12)
                                 }
                             }
-
+                            
                             Text("You will save \(Text(formattedSelectionSize).bold()) of space.")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
