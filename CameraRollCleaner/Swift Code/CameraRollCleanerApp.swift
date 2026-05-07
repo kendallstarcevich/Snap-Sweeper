@@ -11,7 +11,7 @@ import SwiftUI
 struct CameraRollCleanerApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            SplashScreenView()
                 .preferredColorScheme(.light)
         }
     }
