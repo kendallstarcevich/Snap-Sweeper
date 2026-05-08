@@ -1058,14 +1058,15 @@ struct ContentView: View {
             .onAppear { photoManager.fetchAllPhotos() }
         }
     }
-    
-    
-    
     // MARK: - Video Results View
     struct VideoResultsView: View {
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
         @State private var dragLocation: CGPoint = .zero
+        @State private var dragVisitedIDs: Set<String> = []
+        @State private var isDragDeselecting = false
+        @State private var showDeleteSplash = false
+        @State private var deletedCount = 0
         
         let theme = ContentView.videoTheme
         
@@ -1149,11 +1150,23 @@ struct ContentView: View {
                                         GeometryReader { geo in
                                             Color.clear.onChange(of: dragLocation) { _, newLoc in
                                                 if geo.frame(in: .global).contains(newLoc) {
-                                                    selectionManager.dragSelect(id: asset.localIdentifier)
+                                                    let id = asset.localIdentifier
+                                                    if dragVisitedIDs.isEmpty {
+                                                        isDragDeselecting =
+                                                            selectionManager.selectedAssetIDs.contains(id)
+                                                    }
+                                                    if !dragVisitedIDs.contains(id) {
+                                                        dragVisitedIDs.insert(id)
+                                                        if isDragDeselecting {
+                                                            selectionManager.selectedAssetIDs.remove(id)
+                                                        } else {
+                                                            selectionManager.selectedAssetIDs.insert(id)
+                                                        }
+                                                    }
                                                 }
                                             }
-                                        }
-                                    )
+                                        })
+
                                     .overlay(alignment: .bottomTrailing) { VideoBadge(asset: asset) }
                                     .overlay(alignment: .topTrailing) {
                                         SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
@@ -1167,8 +1180,14 @@ struct ContentView: View {
                     }
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 15, coordinateSpace: .global)
-                            .onChanged { dragLocation = $0.location }
-                            .onEnded { _ in dragLocation = .zero }
+                            .onChanged { value in
+                                dragLocation = value.location
+                            }
+                            .onEnded { _ in
+                                dragLocation = .zero
+                                dragVisitedIDs.removeAll()
+                            }
+
                     )
                     
                     if !selectionManager.selectedAssetIDs.isEmpty {
@@ -1191,9 +1210,23 @@ struct ContentView: View {
                                 }
                                 
                                 Button(action: {
-                                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
-                                        selectionManager.deselectAll()
-                                        photoManager.fetchVideos()
+                                    let count = selectionManager.selectedAssetIDs.count
+
+
+                                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                                        if success {
+                                            deletedCount = count
+                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                                                showDeleteSplash = true
+                                            }
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+                                                withAnimation {
+                                                    showDeleteSplash = false
+                                                }
+                                            }
+                                            selectionManager.deselectAll()
+                                            photoManager.fetchVideos()
+                                        }
                                     }
                                 }) {
                                     VStack {
@@ -1217,6 +1250,11 @@ struct ContentView: View {
                         .shadow(color: theme.accentColor.opacity(0.12), radius: 10, y: -5)
                     }
                 }
+                if showDeleteSplash {
+                    SplashDeleteView(
+                        deletedCount: deletedCount
+                    )
+                }
             }
             .navigationBarBackButtonHidden(true)
             .navigationTitle("Videos")
@@ -1233,6 +1271,11 @@ struct ContentView: View {
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
         @State private var dragLocation: CGPoint = .zero
+        @State private var dragVisitedIDs: Set<String> = []
+        @State private var isDragDeselecting = false
+        @State private var showDeleteSplash = false
+        @State private var deletedCount = 0
+
         
         let theme = ContentView.screenshotTheme
         
@@ -1300,12 +1343,39 @@ struct ContentView: View {
                                     .background(
                                         GeometryReader { geo in
                                             Color.clear.onChange(of: dragLocation) { _, newLoc in
+
+
                                                 if geo.frame(in: .global).contains(newLoc) {
-                                                    selectionManager.dragSelect(id: asset.localIdentifier)
+
+
+                                                    let id = asset.localIdentifier
+
+
+                                                    // Determine mode from first touched photo
+                                                    if dragVisitedIDs.isEmpty {
+                                                        isDragDeselecting =
+                                                            selectionManager.selectedAssetIDs.contains(id)
+                                                    }
+
+
+                                                    // Prevent repeated toggling
+                                                    if !dragVisitedIDs.contains(id) {
+
+
+                                                        dragVisitedIDs.insert(id)
+
+
+                                                        if isDragDeselecting {
+                                                            selectionManager.selectedAssetIDs.remove(id)
+                                                        } else {
+                                                            selectionManager.selectedAssetIDs.insert(id)
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                     )
+
                                     .overlay(alignment: .bottomTrailing) { VideoBadge(asset: asset) }
                                     .overlay(alignment: .topTrailing) {
                                         SelectionToggle(id: asset.localIdentifier, selectionManager: selectionManager)
@@ -1319,8 +1389,13 @@ struct ContentView: View {
                     }
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 15, coordinateSpace: .global)
-                            .onChanged { dragLocation = $0.location }
-                            .onEnded { _ in dragLocation = .zero }
+                            .onChanged { value in
+                                        dragLocation = value.location
+                                    }
+                                    .onEnded { _ in
+                                        dragLocation = .zero
+                                        dragVisitedIDs.removeAll()
+                                    }
                     )
                     
                     if !selectionManager.selectedAssetIDs.isEmpty {
@@ -1342,9 +1417,33 @@ struct ContentView: View {
                                 }
                                 
                                 Button(action: {
-                                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
-                                        selectionManager.deselectAll()
+                                    let count = selectionManager.selectedAssetIDs.count
+                                    
+                                    
+                                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                                        if success {
+                                            
+                                            
+                                            deletedCount = count
+                                            
+                                            
+                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                                                showDeleteSplash = true
+                                            }
+                                            
+                                            
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+                                                withAnimation {
+                                                    showDeleteSplash = false
+                                                }
+                                            }
+                                            
+                                            
+                                            selectionManager.deselectAll()
+                                            photoManager.fetchAllPhotos()
+                                        }
                                     }
+                                    
                                 }) {
                                     VStack {
                                         Image(systemName: "trash.fill")
@@ -1366,6 +1465,11 @@ struct ContentView: View {
                         .background(Color.white)
                         .shadow(color: theme.accentColor.opacity(0.12), radius: 10, y: -5)
                     }
+                }
+                if showDeleteSplash {
+                    SplashDeleteView(
+                        deletedCount: deletedCount
+                    )
                 }
             }
             .navigationBarBackButtonHidden(true)
@@ -1676,6 +1780,8 @@ struct ContentView: View {
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
         @Environment(\.dismiss) var dismiss
+        @State private var showDeleteSplash = false
+        @State private var deletedCount = 0
         
         var formattedSelectionSize: String {
             let selectedAssets = group.filter {
@@ -1752,9 +1858,22 @@ struct ContentView: View {
                                 }
                                 
                                 Button(action: {
-                                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
-                                        photoManager.scanForDuplicates()
-                                        dismiss()
+                                    let count = selectionManager.selectedAssetIDs.count
+                                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                                        if success {
+                                            deletedCount = count
+                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                                                showDeleteSplash = true
+                                            }
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+                                                withAnimation {
+                                                    showDeleteSplash = false
+                                                }
+                                            }
+                                            selectionManager.deselectAll()
+                                            photoManager.scanForDuplicates()
+                                            dismiss()
+                                        }
                                     }
                                 }) {
                                     VStack {
@@ -1770,7 +1889,6 @@ struct ContentView: View {
                                     .cornerRadius(12)
                                 }
                             }
-                            
                             Text("You will save \(Text(formattedSelectionSize).bold()) of space.")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -1779,6 +1897,12 @@ struct ContentView: View {
                         .background(Color.white)
                         .shadow(color: ContentView.similarTheme.accentColor.opacity(0.12), radius: 10, y: -5)
                     }
+                }
+                
+                if showDeleteSplash {
+                    SplashDeleteView(
+                        deletedCount: deletedCount
+                    )
                 }
             }
             .navigationTitle("Review Similar")
@@ -1914,7 +2038,10 @@ struct ContentView: View {
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
         @State private var dragLocation: CGPoint = .zero
-        
+        @State private var dragVisitedIDs: Set<String> = []
+        @State private var isDragDeselecting = false
+        @State private var showDeleteSplash = false
+        @State private var deletedCount = 0
         @State private var selectedSort: PhotoManager.SortStrategy = .newest
         @State private var filterPhotos = true
         @State private var filterVideos = true
@@ -1996,7 +2123,6 @@ struct ContentView: View {
                                     .foregroundColor(theme.accentColor)
                                     .font(.caption.bold())
                                 }
-                                
                                 Picker("Sort", selection: $selectedSort) {
                                     ForEach(PhotoManager.SortStrategy.allCases, id: \.self) { strategy in
                                         Text(strategy.rawValue).tag(strategy)
@@ -2016,12 +2142,33 @@ struct ContentView: View {
                                     .background(
                                         GeometryReader { geo in
                                             Color.clear.onChange(of: dragLocation) { _, newLoc in
+
+
                                                 if geo.frame(in: .global).contains(newLoc) {
-                                                    selectionManager.dragSelect(id: asset.localIdentifier)
+
+
+                                                    let id = asset.localIdentifier
+                                                    if dragVisitedIDs.isEmpty {
+                                                        isDragDeselecting =
+                                                            selectionManager.selectedAssetIDs.contains(id)
+                                                    }
+                                                    if !dragVisitedIDs.contains(id) {
+
+
+                                                        dragVisitedIDs.insert(id)
+
+
+                                                        if isDragDeselecting {
+                                                            selectionManager.selectedAssetIDs.remove(id)
+                                                        } else {
+                                                            selectionManager.selectedAssetIDs.insert(id)
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                     )
+
                                     .overlay(alignment: .bottomTrailing) {
                                         VideoBadge(asset: asset)
                                     }
@@ -2037,10 +2184,14 @@ struct ContentView: View {
                     }
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 15, coordinateSpace: .global)
-                            .onChanged { dragLocation = $0.location }
-                            .onEnded { _ in dragLocation = .zero }
+                            .onChanged { value in
+                                dragLocation = value.location
+                            }
+                            .onEnded { _ in
+                                dragLocation = .zero
+                                dragVisitedIDs.removeAll()
+                            }
                     )
-                    
                     if !selectionManager.selectedAssetIDs.isEmpty {
                         VStack(spacing: 15) {
                             HStack(spacing: 15) {
@@ -2065,9 +2216,21 @@ struct ContentView: View {
                                 }
                                 
                                 Button(action: {
-                                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { _ in
-                                        selectionManager.deselectAll()
-                                        photoManager.fetchAllPhotos()
+                                    let count = selectionManager.selectedAssetIDs.count
+                                    photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                                        if success {
+                                            deletedCount = count
+                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                                                showDeleteSplash = true
+                                            }
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+                                                withAnimation {
+                                                    showDeleteSplash = false
+                                                }
+                                            }
+                                            selectionManager.deselectAll()
+                                            photoManager.fetchAllPhotos()
+                                        }
                                     }
                                 }) {
                                     VStack {
@@ -2083,7 +2246,6 @@ struct ContentView: View {
                                     .cornerRadius(12)
                                 }
                             }
-                            
                             Text("Selected: \(selectionManager.selectedAssetIDs.count) items (\(formattedSize))")
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
@@ -2092,6 +2254,10 @@ struct ContentView: View {
                         .background(Color.white)
                         .shadow(color: theme.accentColor.opacity(0.12), radius: 10, y: -5)
                     }
+                }
+                if showDeleteSplash {
+                    SplashDeleteView(
+                        deletedCount: deletedCount)
                 }
             }
             .navigationBarBackButtonHidden(true)
@@ -2430,6 +2596,9 @@ struct ContentView: View {
         @ObservedObject var photoManager: PhotoManager
         @StateObject var selectionManager = SelectionManager()
         @State private var dragLocation: CGPoint = .zero
+        @State private var showDeleteSplash = false
+        @State private var deletedCount = 0
+        
         
         let columns = [
             GridItem(.flexible(), spacing: 4),
@@ -2509,11 +2678,36 @@ struct ContentView: View {
                                 }
                                 
                                 Button(action: {
+                                    let count = selectionManager.selectedAssetIDs.count
+                                    
+                                    
                                     photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                                        
+                                        
                                         if success {
+                                            
+                                            
+                                            deletedCount = count
+                                            
+                                            
+                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                                                showDeleteSplash = true
+                                            }
+                                            
+                                            
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+                                                
+                                                
+                                                withAnimation {
+                                                    showDeleteSplash = false
+                                                }
+                                            }
+                                            
+                                            
                                             selectionManager.deselectAll()
                                         }
                                     }
+                                    
                                 }) {
                                     VStack {
                                         Image(systemName: "trash.fill")
@@ -2538,6 +2732,12 @@ struct ContentView: View {
                         .shadow(color: ContentView.mapTheme.accentColor.opacity(0.12), radius: 10, y: -5)
                     }
                 }
+                if showDeleteSplash {
+                    SplashDeleteView(
+                        deletedCount: deletedCount
+                    )
+                }
+                
             }
             .navigationTitle("Location Photos")
             .navigationBarTitleDisplayMode(.inline)

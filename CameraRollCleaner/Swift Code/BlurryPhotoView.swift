@@ -9,8 +9,6 @@ struct BlurryResult: Identifiable {
     let score: Double
     let image: UIImage
 }
-
-
 // MARK: - Main View
 struct BlurryPhotosView: View {
     
@@ -20,7 +18,12 @@ struct BlurryPhotosView: View {
     @StateObject var selectionManager = SelectionManager()
     
     @State private var dragLocation: CGPoint = .zero
+    @State private var dragVisitedIDs: Set<String> = []
+    @State private var isDragDeselecting = false
     @State private var sortMostBlurryFirst = true
+    @State private var showDeleteSplash = false
+    @State private var deletedCount = 0
+
     
     private let blurManager = BlurModelManager()
     
@@ -90,9 +93,129 @@ struct BlurryPhotosView: View {
                                 )
                             }
                             .buttonStyle(.plain)
+                            .background(
+                                GeometryReader { geo in
+                                    Color.clear.onChange(of: dragLocation) { _, newLoc in
+                                        if geo.frame(in: .global).contains(newLoc) {
+
+
+                                            let id = result.asset.localIdentifier
+
+
+                                            if dragVisitedIDs.isEmpty {
+                                                isDragDeselecting =
+                                                    selectionManager.selectedAssetIDs.contains(id)
+                                            }
+
+
+                                            if !dragVisitedIDs.contains(id) {
+
+
+                                                dragVisitedIDs.insert(id)
+
+
+                                                if isDragDeselecting {
+                                                    selectionManager.selectedAssetIDs.remove(id)
+                                                } else {
+                                                    selectionManager.selectedAssetIDs.insert(id)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            )
+
                         }
                     }
                     .padding(.horizontal, 12)
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 15, coordinateSpace: .global)
+                            .onChanged { value in
+                                dragLocation = value.location
+                            }
+                            .onEnded { _ in
+                                dragLocation = .zero
+                                dragVisitedIDs.removeAll()
+                                isDragDeselecting = false
+                            }
+                    )
+                }
+                if !selectionManager.selectedAssetIDs.isEmpty {
+                    VStack(spacing: 12) {
+                        
+                        
+                        HStack(spacing: 15) {
+                            
+                            
+                            Button(action: {
+                                for id in selectionManager.selectedAssetIDs {
+                                    photoManager.toggleProtection(id: id)
+                                }
+                                
+                                
+                                selectionManager.deselectAll()
+                                
+                                
+                                photoManager.hasScannedBlurry = false
+                                photoManager.scanForBlurryPhotos(using: blurManager)
+                                
+                                
+                            }) {
+                                VStack {
+                                    Image(systemName: "shield.fill")
+                                    Text("Keep \(selectionManager.selectedAssetIDs.count)")
+                                        .font(.caption)
+                                        .bold()
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(AppPalette.darkLemon)
+                                .foregroundColor(AppPalette.titleColor)
+                                .cornerRadius(12)
+                            }
+                            Button(action: {
+                                let count = selectionManager.selectedAssetIDs.count
+                                photoManager.deleteAssets(ids: selectionManager.selectedAssetIDs) { success in
+                                    if success {
+                                        deletedCount = count
+                                        withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                                            showDeleteSplash = true
+                                        }
+                                        
+                                        
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+                                            withAnimation {
+                                                showDeleteSplash = false
+                                            }
+                                        }
+                                        selectionManager.deselectAll()
+                                        photoManager.hasScannedBlurry = false
+                                        photoManager.scanForBlurryPhotos(using: blurManager)
+                                    }
+                                }
+                            }) {
+                                VStack {
+                                    Image(systemName: "trash.fill")
+                                    Text("Delete \(selectionManager.selectedAssetIDs.count)")
+                                        .font(.caption)
+                                        .bold()
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(AppPalette.brightBlue)
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                            }
+                        }
+                        
+                        
+                        Text("Selected \(selectionManager.selectedAssetIDs.count) blurry photos")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding()
+                    .background(Color.white)
+                    .shadow(color: AppPalette.brightBlue.opacity(0.12), radius: 10, y: -5)
                 }
             }
         }
@@ -116,8 +239,8 @@ struct BlurryPhotosView: View {
 }
 
 // MARK: - Grid Item View (FIXES compiler crash)
+
 struct BlurryGridItemView: View {
-    
     let result: BlurryResult
     let selectionManager: SelectionManager
     
@@ -146,10 +269,6 @@ struct BlurryGridItemView: View {
         }
     }
 }
-
-
-
-
 struct BlurryThumbnail: View {
     let image: UIImage
     
@@ -159,8 +278,6 @@ struct BlurryThumbnail: View {
             .aspectRatio(contentMode: .fill)
     }
 }
-
-
 struct BlurScoreBadge: View {
     let score: Double
     
@@ -184,7 +301,8 @@ struct BlurryPhotoPagerView: View {
     
     @ObservedObject var photoManager: PhotoManager
     @ObservedObject var selectionManager: SelectionManager
-    
+    @State private var showDeleteSplash = false
+    @State private var deletedCount = 0
     @State private var currentIndex: Int = 0
     @Environment(\.dismiss) private var dismiss
     
@@ -218,19 +336,41 @@ struct BlurryPhotoPagerView: View {
                             Text("Blur Score: \(result.score, specifier: "%.3f")")
                                 .font(.headline)
                             
-                            HStack(spacing: 16) {
-                                
-                                Button("Keep") {
+                            HStack(spacing: 16){
+                                Button(action: {
                                     photoManager.toggleProtection(id: result.asset.localIdentifier)
+                                }) {
+                                    VStack {
+                                        Image(systemName: "shield.fill")
+
+
+                                        Text("Keep")
+                                            .font(.caption)
+                                            .bold()
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(AppPalette.darkLemon)
+                                    .foregroundColor(AppPalette.titleColor)
+                                    .cornerRadius(12)
                                 }
-                                
-                                Button("Delete") {
+                                Button(action: {
                                     let id = result.asset.localIdentifier
                                     photoManager.deleteAssets(ids: [id]) { success in
                                         if success {
-                                            if let i = results.firstIndex(where: { $0.asset.localIdentifier == id }) {
+                                            deletedCount = 1
+                                            withAnimation(.spring(response: 0.45, dampingFraction: 0.8)) {
+                                                showDeleteSplash = true
+                                            }
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.8) {
+                                                withAnimation {
+                                                    showDeleteSplash = false
+                                                }
+                                            }
+                                            if let i = results.firstIndex(where: {
+                                                $0.asset.localIdentifier == id
+                                            }) {
                                                 results.remove(at: i)
-                                                
                                                 if results.isEmpty {
                                                     dismiss()
                                                 } else if currentIndex >= results.count {
@@ -239,15 +379,33 @@ struct BlurryPhotoPagerView: View {
                                             }
                                         }
                                     }
+                                }) {
+                                    VStack {
+                                        Image(systemName: "trash.fill")
+                                        Text("Delete")
+                                            .font(.caption)
+                                            .bold()
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding()
+                                    .background(AppPalette.darkLemon)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(12)
                                 }
+
                             }
-                            
+                            .padding(.horizontal)
                             Spacer()
                         }
                         .tag(index)
                     }
                 }
                 .tabViewStyle(.page)
+            }
+            if showDeleteSplash {
+                SplashDeleteView(
+                    deletedCount: deletedCount
+                )
             }
         }
         .onAppear {

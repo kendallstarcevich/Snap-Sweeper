@@ -40,7 +40,7 @@ struct SplashScreenView: View {
                     Text("SNAP SWEEPER")
                         .font(
                         .system(
-                            size: 34,
+                            size: 29,
                             weight: .bold,
                             design: .rounded
                         )
